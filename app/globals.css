@@ -24,3 +24,30 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* print css */
+@media print {
+
+  /* ড্যাশবোর্ডের মেনু, বাটন সব হাইড করো */
+  body * {
+    visibility: hidden;
+  }
+
+  /* শুধুমাত্র প্রিন্ট কম্পোনেন্টটি দেখাও */
+  .print-only,
+  .print-only * {
+    visibility: visible;
+  }
+
+  .print-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* পেজ মার্জিন ফিক্স */
+  @page {
+    margin: 1cm;
+  }
+}
