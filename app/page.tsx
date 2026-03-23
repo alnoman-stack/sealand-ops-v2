@@ -30,7 +30,7 @@ export default function Page() {
                view === 'customers' ? 'Customer Management' : 'Product Inventory'}
             </h1>
             <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.4em] mt-1">
-              Sealand Agro Operations Management
+              A Commitment to Freshness!
             </p>
           </div>
 

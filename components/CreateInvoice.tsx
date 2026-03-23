@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, Plus, Trash2, Save, Printer, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, Plus, Trash2, Save, Printer, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 
 export default function InvoiceGenerator() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -11,8 +11,9 @@ export default function InvoiceGenerator() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  // ✅ ভিডিওর সমস্যা সমাধান ১: তারিখ সিলেক্ট করার স্টেট (ডিফল্ট আজকের তারিখ)
+  // ✅ তারিখ সিলেক্ট করার স্টেট (ডিফল্ট আজকের তারিখ)
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -35,16 +36,16 @@ export default function InvoiceGenerator() {
     setFilteredProducts(filtered);
   };
 
-  // ✅ ভিডিওর সমস্যা সমাধান ২: একই প্রোডাক্ট বারবার ক্লিক করলে আলাদা আলাদা লাইনে যোগ হবে
+  // ✅ ভিডিওর সমস্যা সমাধান ২: ইউনিক আইডি জেনারেট করা হয়েছে যাতে এরোর না আসে
   const addItem = (product: any) => {
     const newItem = {
+      id: Date.now(), // কী এরোর এড়াতে ক্লায়েন্ট সাইড ইউনিক আইডি
       product_id: product.id,
       product_name: product.name_en,
       qty: 1,
       unit_price: product.price || 0,
       total: product.price || 0
     };
-    // exist চেক করার লজিক সরিয়ে সরাসরি নতুন আইটেম পুশ করা হয়েছে
     setInvoiceItems([...invoiceItems, newItem]);
   };
 
@@ -63,37 +64,46 @@ export default function InvoiceGenerator() {
 
   const saveInvoice = async () => {
     if (!selectedCustomer || invoiceItems.length === 0) return alert("Select Customer & Add Items!");
-
+    
+    setIsSaving(true);
     const invoiceNumber = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
     
-    // ✅ তারিখসহ ইনভয়েস সেভ
-    const { data: invoice, error: invErr } = await supabase
-      .from('invoices')
-      .insert([{
-        invoice_number: invoiceNumber,
-        customer_name: selectedCustomer.name,
-        customer_address: selectedCustomer.address,
-        total_amount: grandTotal,
-        status: 'pending',
-        created_at: `${invoiceDate}T${new Date().toTimeString().split(' ')[0]}` // সিলেক্ট করা তারিখ ব্যবহার হচ্ছে
-      }])
-      .select()
-      .single();
+    try {
+      // ✅ তারিখসহ ইনভয়েস সেভ
+      const { data: invoice, error: invErr } = await supabase
+        .from('invoices')
+        .insert([{
+          invoice_number: invoiceNumber,
+          customer_name: selectedCustomer.name,
+          customer_address: selectedCustomer.address || '',
+          total_amount: grandTotal,
+          status: 'pending',
+          created_at: `${invoiceDate}T${new Date().toTimeString().split(' ')[0]}` 
+        }])
+        .select()
+        .single();
 
-    if (invErr) return alert("Error saving invoice");
+      if (invErr) throw invErr;
 
-    const itemsToInsert = invoiceItems.map(item => ({
-      invoice_id: invoice.id,
-      product_name: item.product_name,
-      qty: item.qty,
-      unit_price: item.unit_price,
-      total: item.total
-    }));
+      const itemsToInsert = invoiceItems.map(item => ({
+        invoice_id: invoice.id,
+        product_name: item.product_name,
+        qty: item.qty,
+        unit_price: item.unit_price,
+        total: item.total
+      }));
 
-    await supabase.from('invoice_items').insert(itemsToInsert);
-    alert("Invoice Saved Successfully: " + invoiceNumber);
-    setInvoiceItems([]);
-    setSelectedCustomer(null);
+      const { error: itemErr } = await supabase.from('invoice_items').insert(itemsToInsert);
+      if (itemErr) throw itemErr;
+
+      alert("Invoice Saved Successfully: " + invoiceNumber);
+      setInvoiceItems([]);
+      setSelectedCustomer(null);
+    } catch (err: any) {
+      alert("Error saving invoice: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -112,8 +122,9 @@ export default function InvoiceGenerator() {
           />
         </div>
         <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-2">
-          {filteredProducts.map(p => (
-            <div key={p.id} className="flex justify-between items-center p-4 bg-white/5 border border-gray-900 rounded-2xl hover:border-blue-500 transition-all group">
+          {/* ✅ সমাধান: key={p.id || index} ব্যবহার করা হয়েছে */}
+          {filteredProducts.map((p, idx) => (
+            <div key={p.id || `prod-${idx}`} className="flex justify-between items-center p-4 bg-white/5 border border-gray-900 rounded-2xl hover:border-blue-500 transition-all group">
               <div>
                 <p className="font-bold text-sm uppercase">{p.name_en}</p>
                 <p className="text-xs text-gray-500">{p.price} TK / {p.unit || 'unit'}</p>
@@ -132,12 +143,11 @@ export default function InvoiceGenerator() {
           <div>
             <h1 className="text-3xl font-black text-blue-900 leading-none">SEALAND AGRO</h1>
             <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold italic tracking-tighter">Premium Food Supply Chain</p>
-            <p className="text-[9px] text-gray-400 w-64 mt-2">House # 3, Road # Nobinagar 16, Dhaka Uddan, Mohammadpur</p>
+            <p className="text-[9px] text-gray-400 w-64 mt-2 font-bold">House # 3, Road # Nobinagar 16, Dhaka Uddan, Mohammadpur</p>
           </div>
           <div className="text-right flex flex-col items-end gap-2">
             <h2 className="text-2xl font-black uppercase text-gray-200 leading-none">INVOICE</h2>
             
-            {/* ✅ তারিখ সিলেক্টর UI */}
             <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-lg border border-gray-200">
                 <CalendarIcon size={12} className="text-blue-600" />
                 <input 
@@ -192,8 +202,9 @@ export default function InvoiceGenerator() {
               </tr>
             </thead>
             <tbody>
+              {/* ✅ সমাধান: key={item.id} ব্যবহার করা হয়েছে */}
               {invoiceItems.map((item, index) => (
-                <tr key={index} className="border-b text-xs font-bold hover:bg-gray-50 transition-colors">
+                <tr key={item.id || index} className="border-b text-xs font-bold hover:bg-gray-50 transition-colors">
                   <td className="p-4 uppercase text-blue-900 italic">{item.product_name}</td>
                   <td className="p-4 text-center">
                     <input 
@@ -204,7 +215,7 @@ export default function InvoiceGenerator() {
                     />
                   </td>
                   <td className="p-4 text-right">{item.unit_price} TK</td>
-                  <td className="p-4 text-right text-blue-600">{item.total} TK</td>
+                  <td className="p-4 text-right text-blue-600">{item.total.toLocaleString()} TK</td>
                   <td className="p-4 text-center">
                     <button onClick={() => removeItem(index)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
                   </td>
@@ -214,7 +225,6 @@ export default function InvoiceGenerator() {
           </table>
         </div>
 
-        {/* টোটাল এবং অ্যাকশন বাটন আগের মতোই থাকবে */}
         <div className="mt-6 border-t-2 border-dashed pt-6 flex justify-between items-end">
           <div className="text-right w-full">
             <p className="text-[10px] font-black text-gray-400 uppercase">Grand Total Amount</p>
@@ -223,8 +233,13 @@ export default function InvoiceGenerator() {
         </div>
 
         <div className="mt-8 flex gap-4 no-print">
-          <button onClick={saveInvoice} className="flex-1 bg-black text-white py-5 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-gray-800 transition-all shadow-xl">
-            <Save size={18} /> Confirm & Save
+          <button 
+            onClick={saveInvoice} 
+            disabled={isSaving}
+            className="flex-1 bg-black text-white py-5 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-gray-800 transition-all shadow-xl disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} 
+            {isSaving ? "Saving..." : "Confirm & Save"}
           </button>
           <button onClick={() => window.print()} className="bg-blue-600 text-white px-10 py-5 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl">
             <Printer size={18} /> Print Bill

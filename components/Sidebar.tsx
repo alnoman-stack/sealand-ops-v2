@@ -5,23 +5,37 @@ import {
   Users, 
   Package, 
   LogOut,
-  ChevronRight
+  ChevronRight,
+  ShoppingBag // সোর্সিং লিস্টের জন্য নতুন আইকন
 } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // পেজ নেভিগেশনের জন্য
 
 export default function Sidebar({ activeView, setView }) {
+  const router = useRouter();
+
   // মেনু আইটেমগুলোর লিস্ট
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'orders', label: 'Orders', icon: ShoppingCart },
-    { id: 'customers', label: 'Customers', icon: Users },
-    { id: 'products', label: 'Products', icon: Package }, // আপনার নতুন মেনু
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, type: 'view' },
+    { id: 'orders', label: 'Orders', icon: ShoppingCart, type: 'view' },
+    { id: 'customers', label: 'Customers', icon: Users, type: 'view' },
+    { id: 'products', label: 'Products', icon: Package, type: 'view' },
+    // ✅ নতুন সোর্সিং লিস্ট বাটন (এটি সরাসরি পেজে নিয়ে যাবে)
+    { id: 'sourcing', label: 'Sourcing List', icon: ShoppingBag, type: 'link', href: '/sourcing' },
   ];
+
+  const handleMenuClick = (item: any) => {
+    if (item.type === 'link') {
+      router.push(item.href); // আলাদা পেজে নিয়ে যাবে
+    } else {
+      setView(item.id); // একই ড্যাশবোর্ডের ভিউ পরিবর্তন করবে
+    }
+  };
 
   return (
     <aside className="w-72 bg-[#050505] border-r border-gray-900 flex flex-col h-screen sticky top-0">
       {/* লোগো সেকশন */}
       <div className="p-8">
-        <div className="flex items-center gap-3 group cursor-pointer">
+        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push('/')}>
           <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(34,197,94,0.3)]">
             <span className="text-black font-black text-xl">S</span>
           </div>
@@ -43,7 +57,7 @@ export default function Sidebar({ activeView, setView }) {
           return (
             <button
               key={item.id}
-              onClick={() => setView(item.id)}
+              onClick={() => handleMenuClick(item)}
               className={`
                 w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 group
                 ${isActive 

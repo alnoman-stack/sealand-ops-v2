@@ -1,162 +1,221 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-// import { X, DollarSign, CreditCard, ChevronRight } from 'lucide-react';
-import { X, DollarSign, CreditCard, ChevronRight, Clock } from 'lucide-react';
+import { X, RotateCcw, ChevronRight, Calendar } from 'lucide-react';
+
 export default function PaymentModal({ isOpen, onClose, onPaymentSuccess }: any) {
+  // ১ নং সমাধান: ডিফল্টভাবে আজকের তারিখ সেট করা (YYYY-MM-DD)
+  const getToday = () => new Date().toLocaleDateString('en-CA'); 
+  const [paymentDate, setPaymentDate] = useState(getToday());
+  
   const [customers, setCustomers] = useState<any[]>([]);
-  // আমরা এখানে আইডির বদলে নাম ব্যবহার করছি কারণ আপনার ইনভয়েস টেবিলে নাম আছে
   const [selectedCustomerName, setSelectedCustomerName] = useState('');
   const [dueInvoices, setDueInvoices] = useState<any[]>([]);
-  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentAmount, setPaymentAmount] = useState<number | string>('');
+  const [adjustmentAmount, setAdjustmentAmount] = useState<number | string>(''); 
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [reference, setReference] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // কাস্টমার লিস্ট লোড করা
   useEffect(() => {
     const fetchCustomers = async () => {
-      const { data } = await supabase.from('customers').select('*').order('name');
+      const { data, error } = await supabase.from('customers').select('*').order('name');
+      if (error) console.error("Customer Fetch Error:", error);
       setCustomers(data || []);
     };
     if (isOpen) fetchCustomers();
   }, [isOpen]);
 
-  // কাস্টমার সিলেক্ট করলে তার ডিউ ইনভয়েসগুলো আনা
   useEffect(() => {
     const fetchInvoices = async () => {
-      if (!selectedCustomerName) {
-        setDueInvoices([]);
-        return;
-      }
-
-      // ✅ পরিবর্তন: customer_id এর বদলে customer_name ব্যবহার করা হয়েছে
-      const { data, error } = await supabase
-        .from('invoices')
+      if (!selectedCustomerName) return setDueInvoices([]);
+      const { data, error } = await supabase.from('invoices')
         .select('*')
         .eq('customer_name', selectedCustomerName)
-        .gt('due_amount', 0)
         .order('created_at', { ascending: true });
-      
-      if (error) console.error("Error fetching invoices:", error);
-      setDueInvoices(data || []);
+
+      if (error) return console.error("Invoice Fetch Error:", error);
+
+      const formatted = (data || []).map(inv => ({
+          ...inv,
+          calculated_due: (Number(inv.total_amount) || 0) - ((Number(inv.received_amount) || 0) + (Number(inv.total_discount) || 0))
+        })).filter(inv => inv.calculated_due > 0.5);
+      setDueInvoices(formatted);
     };
     fetchInvoices();
   }, [selectedCustomerName]);
 
-  const handlePayment = async () => {
-    if (!selectedCustomerName || paymentAmount <= 0) return alert("Please select customer and amount");
-    setIsSaving(true);
+  const totalDueAmount = dueInvoices.reduce((acc, inv) => acc + inv.calculated_due, 0);
 
+  const handlePayment = async () => {
+    const pAmount = Number(paymentAmount) || 0;
+    const aAmount = Number(adjustmentAmount) || 0;
+    const totalEffect = pAmount + aAmount;
+
+    if (!selectedCustomerName || totalEffect <= 0) {
+      return alert("অনুগ্রহ করে সঠিক অ্যামাউন্ট এবং কাস্টমার ইনপুট দিন।");
+    }
+    
+    setIsSaving(true);
     try {
-      let remaining = paymentAmount;
+      let remaining = totalEffect;
       
+      // লজিক: সিলেক্ট করা তারিখ অনুযায়ী টাইমস্ট্যাম্প তৈরি করা
+      // এটি ডাটাবেসে সেই তারিখেই পেমেন্ট দেখাবে যা আপনি ইনপুটে দিয়েছেন (যেমন ২২ তারিখ)
+      const selectedDateObj = new Date(paymentDate);
+      const dbPaymentDate = selectedDateObj.toISOString();
+
       for (const inv of dueInvoices) {
         if (remaining <= 0) break;
+        
+        const toApply = Math.min(inv.calculated_due, remaining);
+        const ratio = toApply / totalEffect;
+        const cashPart = Number((pAmount * ratio).toFixed(2));
+        const discountPart = Number((aAmount * ratio).toFixed(2));
 
-        const amountToApply = Math.min(inv.due_amount, remaining);
-        const newReceived = (inv.received_amount || 0) + amountToApply;
-        const newDue = inv.total_amount - newReceived;
-
-        await supabase.from('invoices').update({
-          received_amount: newReceived,
-          due_amount: newDue,
-          status: newDue <= 0 ? 'Paid' : 'Due' // আপনার ডাটাবেসের স্ট্যাটাস অনুযায়ী
+        // ১. ইনভয়েস টেবিল আপডেট
+        const { error: invError } = await supabase.from('invoices').update({
+          received_amount: (Number(inv.received_amount) || 0) + cashPart,
+          total_discount: (Number(inv.total_discount) || 0) + discountPart,
+          status: (inv.calculated_due - toApply) <= 1 ? 'paid' : 'pending',
+          last_payment_date: dbPaymentDate // লাস্ট পেমেন্ট ডেট আপডেট
         }).eq('id', inv.id);
 
-        remaining -= amountToApply;
+        if (invError) throw invError;
+
+        // ২. পেমেন্ট হিস্ট্রি টেবিল এন্ট্রি
+        const { error: payError } = await supabase.from('payments').insert([{
+          customer_name: selectedCustomerName,
+          invoice_id: inv.id, 
+          amount_paid: cashPart, 
+          adjustment_amount: discountPart, 
+          payment_method: paymentMethod, 
+          reference: reference || "",
+          payment_date: dbPaymentDate // এই তারিখটিই আপনার Cash Received ফিল্টারে কাজ করবে
+        }]);
+
+        if (payError) throw payError;
+        remaining -= toApply;
       }
 
-      alert("Payment Successful!");
+      alert("পেমেন্ট সফলভাবে সম্পন্ন হয়েছে!");
       onPaymentSuccess();
+      resetForm();
       onClose();
-      setPaymentAmount(0);
-      setSelectedCustomerName('');
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e: any) { 
+      console.error("Payment Error:", e);
+      alert("Error: " + (e.message || "Unknown error")); 
+    } finally { setIsSaving(false); }
+};
+
+  const resetForm = () => {
+    setPaymentAmount(''); 
+    setAdjustmentAmount('');
+    setSelectedCustomerName(''); 
+    setReference('');
+    setPaymentDate(getToday());
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-      <div className="bg-[#0a0a0a] border border-gray-900 w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col shadow-2xl">
-        
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
+      <div className="bg-[#0a0a0a] border border-gray-900 w-full max-w-6xl rounded-[3rem] overflow-hidden flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="p-8 border-b border-gray-900 flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-black uppercase italic text-white flex items-center gap-3">
-              <CreditCard className="text-green-500" /> Make Payment
-            </h2>
-            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mt-1">Receive funds from customer</p>
+        <div className="p-8 border-b border-gray-900 flex justify-between items-center bg-gradient-to-r from-black to-[#050505]">
+          <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">New Transaction</h2>
+          <div className="flex gap-4">
+            <button onClick={resetForm} className="p-4 bg-gray-900 rounded-full text-gray-400 hover:text-white transition-all"><RotateCcw size={18}/></button>
+            <button onClick={onClose} className="p-4 bg-gray-900 rounded-full text-gray-400 hover:text-red-500 transition-all"><X size={20}/></button>
           </div>
-          <button onClick={onClose} className="p-3 bg-gray-900 rounded-full text-gray-400 hover:text-white"><X size={20}/></button>
         </div>
 
-        <div className="p-8 flex gap-8 overflow-hidden h-[500px]">
-          {/* Left: Input Section */}
-          <div className="flex-1 space-y-6">
-            <div>
-              <label className="text-[10px] font-black uppercase text-gray-500 mb-2 block">1. Select Customer</label>
-              <select 
-                className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white text-sm font-bold outline-none focus:border-green-500 transition-all cursor-pointer"
-                value={selectedCustomerName}
-                onChange={(e) => setSelectedCustomerName(e.target.value)}
-              >
-                <option value="">Choose Customer...</option>
-                {/* ✅ কাস্টমার নেম ভ্যালু হিসেবে পাঠানো হচ্ছে */}
-                {customers.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
+        <div className="p-10 flex flex-col lg:flex-row gap-10 max-h-[80vh] overflow-y-auto scrollbar-hide">
+          <div className="flex-1 space-y-8">
+            <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Customer</label>
+                    <select className="w-full bg-black border-2 border-gray-900 p-5 rounded-3xl text-white font-bold outline-none focus:border-green-500 transition-all" value={selectedCustomerName} onChange={(e) => setSelectedCustomerName(e.target.value)}>
+                        <option value="">Select Customer...</option>
+                        {customers.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                </div>
+                
+                {/* পেমেন্ট ডেট ইনপুট */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-500 ml-2 flex items-center gap-1"><Calendar size={10}/> Transaction Date</label>
+                    <input 
+                      type="date" 
+                      value={paymentDate} 
+                      onChange={(e) => setPaymentDate(e.target.value)} 
+                      className="w-full bg-black border-2 border-gray-900 p-5 rounded-3xl text-white font-bold outline-none focus:border-blue-500 transition-all uppercase cursor-pointer" 
+                    />
+                </div>
             </div>
 
-            <div>
-              <label className="text-[10px] font-black uppercase text-gray-500 mb-2 block">2. Payment Amount (BDT)</label>
-              <div className="relative">
-                <input 
-                  type="number"
-                  placeholder="0.00"
-                  className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-3xl font-black text-green-500 outline-none focus:border-green-500"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-                />
-                <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-700 font-black italic">TK</span>
-              </div>
+            <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-gray-400 mb-2 ml-2 block">Received Cash</label>
+                  <input type="number" placeholder="0.00" className="w-full bg-black border-2 border-gray-900 p-7 rounded-3xl text-4xl font-black text-green-500 outline-none focus:border-green-500 transition-all" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-gray-400 mb-2 ml-2 block">Adjustment / Damage</label>
+                  <input type="number" placeholder="0.00" className="w-full bg-black border-2 border-gray-900 p-7 rounded-3xl text-4xl font-black text-orange-500 outline-none focus:border-orange-500 transition-all" value={adjustmentAmount} onChange={(e) => setAdjustmentAmount(e.target.value)} />
+                </div>
             </div>
 
-            <button 
-              onClick={handlePayment}
-              disabled={isSaving}
-              className="w-full bg-green-500 hover:bg-green-400 text-black py-6 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 transition-all disabled:opacity-50 shadow-lg shadow-green-900/20"
-            >
-              {isSaving ? "Processing..." : <><DollarSign size={18} /> Confirm Payment</>}
+            <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Payment Method</label>
+                    <select className="w-full bg-black border-2 border-gray-900 p-5 rounded-3xl text-white font-bold outline-none focus:border-blue-500 transition-all" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                        <option value="Cash">Cash</option>
+                        <option value="bKash">bKash</option>
+                        <option value="Nagad">Nagad</option>
+                        <option value="Bank">Bank Transfer</option>
+                    </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Reference / Note</label>
+                  <input type="text" placeholder="e.g. Damage, Note" className="w-full bg-black border-2 border-gray-900 p-5 rounded-3xl text-white font-bold outline-none focus:border-blue-500 transition-all" value={reference} onChange={(e) => setReference(e.target.value)} />
+                </div>
+            </div>
+
+            <button onClick={handlePayment} disabled={isSaving} className="w-full bg-green-500 py-7 rounded-[2rem] font-black uppercase text-black hover:bg-green-400 transition-all disabled:opacity-20 shadow-xl shadow-green-500/10 active:scale-[0.98]">
+              {isSaving ? "Saving Transaction..." : "Confirm Transaction"}
             </button>
           </div>
 
-          {/* Right: Due Invoices List */}
-          <div className="w-1/2 bg-white/5 rounded-3xl p-6 border border-gray-900 flex flex-col">
-            <h3 className="text-[10px] font-black uppercase text-gray-500 mb-4 tracking-tighter italic">Pending Invoices ({dueInvoices.length})</h3>
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-              {dueInvoices.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full opacity-20">
-                    <Clock size={40} className="mb-2" />
-                    <p className="text-[10px] uppercase font-black italic">No Dues Found</p>
-                </div>
-              ) : (
-                dueInvoices.map(inv => (
-                  <div key={inv.id} className="bg-black/40 border border-gray-800 p-4 rounded-xl flex justify-between items-center group hover:border-green-500/50 transition-all">
-                    <div>
-                      <p className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{inv.invoice_number || 'INV-####'}</p>
-                      <p className="text-xs font-bold text-gray-300 italic">{inv.due_amount.toLocaleString()}/-</p>
+          {/* Right Sidebar */}
+          <div className="w-full lg:w-[350px] space-y-6">
+            <div className="bg-blue-500/5 border border-blue-500/10 p-8 rounded-[2.5rem] shadow-inner">
+                <p className="text-[10px] font-black uppercase text-blue-500/60 mb-1">Total Outstanding</p>
+                <p className="text-4xl font-black text-blue-500 italic tracking-tighter">{totalDueAmount.toLocaleString()} TK</p>
+            </div>
+            
+            {/* Scrollable Overdue List - no scrollbar */}
+            <div className="bg-white/[0.02] rounded-[2.5rem] p-6 border border-gray-900 h-[380px] overflow-y-auto space-y-3 scrollbar-hide shadow-2xl">
+                <h3 className="text-[10px] font-black uppercase text-gray-500 px-2 tracking-widest">Pending Invoices</h3>
+                {dueInvoices.length === 0 ? (
+                  <p className="text-[10px] text-gray-700 italic p-10 text-center">No pending dues</p>
+                ) : (
+                  dueInvoices.map(inv => (
+                    <div key={inv.id} className="bg-black/40 border border-gray-800 p-4 rounded-2xl flex justify-between items-center group hover:border-blue-500/30 transition-all">
+                        <div>
+                            <p className="text-[9px] font-black text-gray-600 uppercase italic">Inv: {inv.invoice_number || 'N/A'}</p>
+                            <p className="text-md font-black text-gray-300 group-hover:text-white transition-colors">{inv.calculated_due.toLocaleString()}/-</p>
+                        </div>
+                        <ChevronRight size={14} className="text-gray-800 group-hover:text-blue-500 transition-colors" />
                     </div>
-                    <ChevronRight size={14} className="text-gray-700 group-hover:text-green-500 transition-all" />
-                  </div>
-                ))
-              )}
+                  ))
+                )}
             </div>
           </div>
         </div>
       </div>
+      <style jsx global>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </div>
   );
 }

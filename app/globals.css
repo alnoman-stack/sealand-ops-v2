@@ -51,3 +51,21 @@ body {
     margin: 1cm;
   }
 }
+
+/* স্ক্রলবার পুরোপুরি মুছে ফেলার জন্য */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* Internet Explorer 10+ */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+/* চিকন এবং সুন্দর স্ক্রলবার */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
