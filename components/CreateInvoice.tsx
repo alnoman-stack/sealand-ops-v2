@@ -13,12 +13,26 @@ export default function InvoiceGenerator() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // ✅ তারিখ সিলেক্ট করার স্টেট (ডিফল্ট আজকের তারিখ)
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
+  // ১. নির্ভুল লোকাল তারিখ বের করার ফাংশন (টাইমজোন বাগ ফিক্সড)
+  const getLocalDate = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - offset).toISOString().split('T')[0];
+  };
+
+  const [invoiceDate, setInvoiceDate] = useState(getLocalDate());
 
   useEffect(() => {
     loadData();
-  }, []);
+    // প্রতি এক মিনিট অন্তর তারিখ চেক করা যাতে তারিখ পরিবর্তন হলে আপডেট হয়
+    const interval = setInterval(() => {
+      const today = getLocalDate();
+      if (today !== invoiceDate) {
+        setInvoiceDate(today);
+      }
+    }, 60000); 
+    return () => clearInterval(interval);
+  }, [invoiceDate]);
 
   const loadData = async () => {
     const { data: cust } = await supabase.from('customers').select('*');
@@ -36,23 +50,39 @@ export default function InvoiceGenerator() {
     setFilteredProducts(filtered);
   };
 
-  // ✅ ভিডিওর সমস্যা সমাধান ২: ইউনিক আইডি জেনারেট করা হয়েছে যাতে এরোর না আসে
   const addItem = (product: any) => {
-    const newItem = {
-      id: Date.now(), // কী এরোর এড়াতে ক্লায়েন্ট সাইড ইউনিক আইডি
-      product_id: product.id,
-      product_name: product.name_en,
-      qty: 1,
-      unit_price: product.price || 0,
-      total: product.price || 0
-    };
-    setInvoiceItems([...invoiceItems, newItem]);
+    setInvoiceItems((prevItems) => {
+      const existingItemIndex = prevItems.findIndex(
+        (item) => item.product_name === product.name_en
+      );
+
+      if (existingItemIndex > -1) {
+        const updatedItems = [...prevItems];
+        const itemToUpdate = { ...updatedItems[existingItemIndex] };
+        itemToUpdate.qty += 1;
+        itemToUpdate.total = Number((itemToUpdate.qty * itemToUpdate.unit_price).toFixed(2));
+        updatedItems[existingItemIndex] = itemToUpdate;
+        return updatedItems;
+      } else {
+        return [
+          ...prevItems,
+          {
+            id: Date.now(),
+            product_id: product.id || Math.random(),
+            product_name: product.name_en,
+            qty: 1,
+            unit_price: product.price || 0,
+            total: product.price || 0
+          }
+        ];
+      }
+    });
   };
 
   const updateQty = (index: number, qty: number) => {
     const updated = [...invoiceItems];
     updated[index].qty = qty;
-    updated[index].total = qty * updated[index].unit_price;
+    updated[index].total = Number((qty * updated[index].unit_price).toFixed(2));
     setInvoiceItems(updated);
   };
 
@@ -60,16 +90,22 @@ export default function InvoiceGenerator() {
     setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
   };
 
-  const grandTotal = invoiceItems.reduce((sum, item) => sum + item.total, 0);
+  const grandTotal = Number(invoiceItems.reduce((sum, item) => sum + item.total, 0).toFixed(2));
 
+  // ২. ইনভয়েস সেভ করার আপডেট লজিক
   const saveInvoice = async () => {
     if (!selectedCustomer || invoiceItems.length === 0) return alert("Select Customer & Add Items!");
-    
     setIsSaving(true);
-    const invoiceNumber = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
+    
+    // প্রফেশনাল ইনভয়েস নাম্বার ফরম্যাট (র্যান্ডম হলেও ইউনিক রাখার চেষ্টা)
+    const invoiceNumber = `INV-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
     
     try {
-      // ✅ তারিখসহ ইনভয়েস সেভ
+      // ৩. টাইমস্ট্যাম্প ফিক্স: বর্তমান সময়ের অংশটি নিয়ে ডেট-এর সাথে জোড়া দেওয়া
+      const now = new Date();
+      const timePart = now.toISOString().split('T')[1]; // HH:mm:ss.sssZ
+      const finalTimestamp = `${invoiceDate}T${timePart}`;
+
       const { data: invoice, error: invErr } = await supabase
         .from('invoices')
         .insert([{
@@ -78,7 +114,7 @@ export default function InvoiceGenerator() {
           customer_address: selectedCustomer.address || '',
           total_amount: grandTotal,
           status: 'pending',
-          created_at: `${invoiceDate}T${new Date().toTimeString().split(' ')[0]}` 
+          created_at: finalTimestamp // এখন এটি সুপাবেসে সঠিক ডেট হিসেবেই যাবে
         }])
         .select()
         .single();
@@ -99,7 +135,9 @@ export default function InvoiceGenerator() {
       alert("Invoice Saved Successfully: " + invoiceNumber);
       setInvoiceItems([]);
       setSelectedCustomer(null);
+      
     } catch (err: any) {
+      console.error("Save Error:", err);
       alert("Error saving invoice: " + err.message);
     } finally {
       setIsSaving(false);
@@ -107,30 +145,32 @@ export default function InvoiceGenerator() {
   };
 
   return (
-    <div className="flex gap-6 p-6 bg-[#050505] min-h-screen text-white">
+    <div className="flex gap-6 p-6 bg-[#050505] h-screen text-white overflow-hidden font-sans">
+      
       {/* বাম পাশ: প্রোডাক্ট লিস্ট */}
-      <div className="w-1/3 bg-[#0a0a0a] border border-gray-900 rounded-3xl p-6">
-        <h3 className="text-lg font-black uppercase italic mb-4">Select Products</h3>
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-3 text-gray-500" size={18} />
+      <div className="w-1/3 bg-[#0a0a0a] border border-gray-900 rounded-3xl p-6 flex flex-col overflow-hidden shadow-2xl">
+        <h3 className="text-lg font-black uppercase italic mb-4 shrink-0 tracking-tighter text-blue-500">Select Products</h3>
+        
+        <div className="relative mb-6 shrink-0">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
           <input 
             type="text"
             placeholder="Search product..."
-            className="w-full bg-black border border-gray-800 rounded-xl py-3 pl-10 pr-4 outline-none focus:border-blue-500"
+            className="w-full bg-black border border-gray-800 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 text-sm font-bold transition-all shadow-inner"
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
-        <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-2">
-          {/* ✅ সমাধান: key={p.id || index} ব্যবহার করা হয়েছে */}
+
+        <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
           {filteredProducts.map((p, idx) => (
-            <div key={p.id || `prod-${idx}`} className="flex justify-between items-center p-4 bg-white/5 border border-gray-900 rounded-2xl hover:border-blue-500 transition-all group">
-              <div>
-                <p className="font-bold text-sm uppercase">{p.name_en}</p>
-                <p className="text-xs text-gray-500">{p.price} TK / {p.unit || 'unit'}</p>
+            <div key={p.id || `prod-${idx}`} className="flex justify-between items-center p-5 bg-white/5 border border-gray-900 rounded-[1.5rem] hover:border-blue-500/50 hover:bg-white/10 transition-all group">
+              <div className="text-left">
+                <p className="font-black text-xs uppercase tracking-tight text-gray-200">{p.name_en}</p>
+                <p className="text-[10px] text-blue-500 font-black mt-1 uppercase tracking-widest">{p.price} TK / {p.unit || 'unit'}</p>
               </div>
-              <button onClick={() => addItem(p)} className="p-2 bg-blue-600 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
-                <Plus size={16} />
+              <button onClick={() => addItem(p)} className="p-3 bg-blue-600 hover:bg-blue-500 rounded-xl text-white shadow-lg active:scale-90 transition-transform">
+                <Plus size={18} />
               </button>
             </div>
           ))}
@@ -138,114 +178,132 @@ export default function InvoiceGenerator() {
       </div>
 
       {/* ডান পাশ: ইনভয়েস প্রিভিউ */}
-      <div className="flex-1 bg-white text-black rounded-3xl p-8 shadow-2xl flex flex-col">
-        <div className="flex justify-between items-start border-b pb-6 mb-6">
-          <div>
-            <h1 className="text-3xl font-black text-blue-900 leading-none">SEALAND AGRO</h1>
-            <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold italic tracking-tighter">Premium Food Supply Chain</p>
-            <p className="text-[9px] text-gray-400 w-64 mt-2 font-bold">House # 3, Road # Nobinagar 16, Dhaka Uddan, Mohammadpur</p>
+      <div className="flex-1 bg-white text-black rounded-[2.5rem] p-10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col overflow-y-auto custom-scrollbar relative">
+        
+        {/* ইনভয়েস হেডার */}
+        <div className="flex justify-between items-start border-b-2 border-gray-100 pb-8 mb-8 shrink-0">
+          <div className="text-left">
+            <h1 className="text-4xl font-black text-blue-900 leading-none italic tracking-tighter">SEALAND AGRO</h1>
+            <p className="text-[11px] text-gray-500 mt-2 uppercase font-black italic tracking-[0.2em]">A Commitment To Freshness!</p>
+            <p className="text-[10px] text-gray-400 w-72 mt-3 font-bold uppercase leading-relaxed">House # 3, Road # Nobinagar 16, Dhaka Uddan, Mohammadpur</p>
           </div>
-          <div className="text-right flex flex-col items-end gap-2">
-            <h2 className="text-2xl font-black uppercase text-gray-200 leading-none">INVOICE</h2>
-            
-            <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-lg border border-gray-200">
-                <CalendarIcon size={12} className="text-blue-600" />
+          <div className="text-right flex flex-col items-end gap-3">
+            <h2 className="text-3xl font-black uppercase text-gray-200 leading-none italic">INVOICE</h2>
+            <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 shadow-sm">
+                <CalendarIcon size={14} className="text-blue-600" />
                 <input 
                     type="date"
                     value={invoiceDate}
                     onChange={(e) => setInvoiceDate(e.target.value)}
-                    className="bg-transparent text-[10px] font-black outline-none cursor-pointer"
+                    className="bg-transparent text-xs font-black outline-none cursor-pointer uppercase tracking-tighter"
                 />
             </div>
           </div>
         </div>
 
         {/* কাস্টমার সিলেকশন */}
-        <div className="mb-4">
+        <div className="mb-6 shrink-0">
           <select 
-            className="w-full p-4 border-2 border-gray-100 rounded-2xl font-black outline-none bg-gray-50 text-xs uppercase"
+            className="w-full p-5 border-2 border-gray-50 rounded-[1.5rem] font-black outline-none bg-gray-50 text-xs uppercase tracking-widest focus:border-blue-200 transition-all appearance-none shadow-sm cursor-pointer"
             onChange={(e) => setSelectedCustomer(customers.find(c => c.id === e.target.value))}
             value={selectedCustomer?.id || ""}
           >
-            <option value="">-- Choose Customer --</option>
+            <option value="">-- CHOOSE TARGET CUSTOMER --</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
           </select>
         </div>
 
-        {/* কাস্টমারের ঠিকানা */}
         {selectedCustomer && (
-          <div className="mb-6 p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex justify-between items-center">
-            <div>
-              <p className="text-[9px] font-black uppercase text-blue-600 mb-1">Billing Details:</p>
-              <p className="text-sm font-black uppercase">{selectedCustomer.name}</p>
-              <p className="text-[11px] text-gray-600 font-bold uppercase tracking-tighter">
-                {selectedCustomer.address ? selectedCustomer.address : "No Address Found"}
+          <div className="mb-8 p-6 bg-blue-50/40 rounded-[2rem] border border-blue-100 flex justify-between items-center shrink-0">
+            <div className="text-left">
+              <p className="text-[10px] font-black uppercase text-blue-600 mb-2 tracking-widest italic">Billing Recipient:</p>
+              <p className="text-xl font-black uppercase italic tracking-tight">{selectedCustomer.name}</p>
+              <p className="text-xs text-gray-600 font-bold uppercase mt-1">
+                {selectedCustomer.address || "No Address Found"}
               </p>
             </div>
             <div className="text-right">
-                <p className="text-[9px] font-black uppercase text-gray-400">Phone</p>
-                <p className="text-xs font-bold">{selectedCustomer.phone}</p>
+                <p className="text-[10px] font-black uppercase text-gray-400 mb-1 tracking-widest">Contact Phone</p>
+                <p className="text-sm font-black tracking-tight text-blue-900">{selectedCustomer.phone}</p>
             </div>
           </div>
         )}
 
-        {/* আইটেম টেবিল */}
-        <div className="flex-1 overflow-y-auto">
-          <table className="w-full text-left">
+        {/* টেবিল এরিয়া */}
+        <div className="flex-1 mb-8 min-h-[200px]">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-blue-900 text-white uppercase text-[10px] font-black italic">
-                <th className="p-4 rounded-l-xl">Product Name</th>
-                <th className="p-4 text-center">Qty</th>
-                <th className="p-4 text-right">Unit Price</th>
-                <th className="p-4 text-right">Total</th>
-                <th className="p-4 text-center rounded-r-xl"></th>
+              <tr className="bg-blue-900 text-white uppercase text-[10px] font-black italic tracking-widest shadow-lg">
+                <th className="p-5 rounded-l-2xl">Cargo Description</th>
+                <th className="p-5 text-center">Qty</th>
+                <th className="p-5 text-right">Unit Price</th>
+                <th className="p-5 text-right">Sub-Total</th>
+                <th className="p-5 text-center rounded-r-2xl">Action</th>
               </tr>
             </thead>
-            <tbody>
-              {/* ✅ সমাধান: key={item.id} ব্যবহার করা হয়েছে */}
+            <tbody className="divide-y divide-gray-100">
               {invoiceItems.map((item, index) => (
-                <tr key={item.id || index} className="border-b text-xs font-bold hover:bg-gray-50 transition-colors">
-                  <td className="p-4 uppercase text-blue-900 italic">{item.product_name}</td>
-                  <td className="p-4 text-center">
+                <tr key={item.id || index} className="text-xs font-bold hover:bg-gray-50/80 transition-colors group">
+                  <td className="p-5 uppercase text-blue-900 italic font-black">{item.product_name}</td>
+                  <td className="p-5 text-center">
                     <input 
                       type="number" 
-                      className="w-14 border-2 border-gray-100 rounded-lg p-1 text-center font-black" 
+                      step="any"
+                      className="w-16 bg-gray-100 border-2 border-transparent rounded-xl p-2 text-center font-black focus:bg-white focus:border-blue-500 transition-all outline-none" 
                       value={item.qty} 
                       onChange={(e) => updateQty(index, parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className="p-4 text-right">{item.unit_price} TK</td>
-                  <td className="p-4 text-right text-blue-600">{item.total.toLocaleString()} TK</td>
-                  <td className="p-4 text-center">
-                    <button onClick={() => removeItem(index)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                  <td className="p-5 text-right text-gray-500 font-black">{item.unit_price} TK</td>
+                  <td className="p-5 text-right text-blue-600 font-black text-sm italic">{item.total.toLocaleString()} TK</td>
+                  <td className="p-5 text-center">
+                    <button onClick={() => removeItem(index)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {invoiceItems.length === 0 && (
+              <div className="h-32 flex items-center justify-center border-2 border-dashed border-gray-100 rounded-[2rem] mt-4">
+                  <p className="text-[10px] font-black uppercase text-gray-300 tracking-widest italic">No Items Selected For Cargo</p>
+              </div>
+          )}
         </div>
 
-        <div className="mt-6 border-t-2 border-dashed pt-6 flex justify-between items-end">
-          <div className="text-right w-full">
-            <p className="text-[10px] font-black text-gray-400 uppercase">Grand Total Amount</p>
-            <p className="text-4xl font-black text-blue-900 tracking-tighter">{grandTotal.toLocaleString()} <span className="text-sm">TK</span></p>
+        {/* গ্র্যান্ড টোটাল ও বাটন */}
+        <div className="mt-auto shrink-0 border-t-4 border-double border-gray-100 pt-8">
+          <div className="flex justify-between items-end mb-8">
+            <div className="text-left">
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic mb-2">Sea-Land Agro Digital Signature</p>
+                 <div className="w-32 h-1 border-b-2 border-gray-100"></div>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">Total Payable Amount</p>
+              <p className="text-5xl font-black text-blue-900 tracking-tighter italic">{grandTotal.toLocaleString()} <span className="text-lg not-italic text-blue-500 ml-1 uppercase">TK</span></p>
+            </div>
+          </div>
+
+          <div className="flex gap-4 no-print mb-4">
+            <button 
+              onClick={saveInvoice} 
+              disabled={isSaving}
+              className="flex-1 bg-black text-white py-6 rounded-[1.5rem] font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 hover:bg-gray-800 transition-all shadow-xl active:scale-95 disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />} 
+              {isSaving ? "Syncing..." : "Commit & Save Invoice"}
+            </button>
+            <button onClick={() => window.print()} className="bg-blue-600 text-white px-12 py-6 rounded-[1.5rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:bg-blue-500 transition-all shadow-xl active:scale-95">
+              <Printer size={20} /> Print Copy
+            </button>
           </div>
         </div>
-
-        <div className="mt-8 flex gap-4 no-print">
-          <button 
-            onClick={saveInvoice} 
-            disabled={isSaving}
-            className="flex-1 bg-black text-white py-5 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-gray-800 transition-all shadow-xl disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} 
-            {isSaving ? "Saving..." : "Confirm & Save"}
-          </button>
-          <button onClick={() => window.print()} className="bg-blue-600 text-white px-10 py-5 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl">
-            <Printer size={18} /> Print Bill
-          </button>
-        </div>
       </div>
+      
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
+      `}</style>
     </div>
   );
 }

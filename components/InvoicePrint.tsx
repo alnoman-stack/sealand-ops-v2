@@ -25,12 +25,14 @@ const InvoicePrint = forwardRef(({ data, items }: any, ref: any) => {
         <div className="invoice-header">
           <div className="company-info">
             <h1 className="logo-text">SEALAND AGRO</h1>
+            <p className="text-[11px] text-gray-500 mt-2 uppercase font-black italic tracking-[0.2em]">A Commitment To Freshness!</p>
+            <p className="sub-text"></p>
             <p className="sub-text">House # 3, Road # Nobinagar 16, Dhaka Uddan, Mohammadpur</p>
             <p className="sub-text">Mobile: +8801714114396 | Email: sealandagro@gmail.com</p>
           </div>
           <div className="invoice-details">
             <h2 className="title-large">INVOICE</h2>
-            <p className="date-text">Date: {new Date().toLocaleDateString('en-GB')}</p>
+            <p className="date-text">Date: {data?.created_at ? new Date(data.created_at).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')}</p>
             <p className="inv-no"># {data.invoice_number}</p>
           </div>
         </div>
@@ -83,8 +85,8 @@ const InvoicePrint = forwardRef(({ data, items }: any, ref: any) => {
             <span className="label-top">IN WORDS:</span>
             <p className="words-display">{numberToWords(data.total_amount)}</p>
           </div>
-          <div className="grand-total-display">
-            <span className="total-label">GRAND TOTAL</span>
+          <div className="words-box">
+            <span className="label-top">GRAND TOTAL</span>
             <p className="total-amount">{data.total_amount} <small>TK</small></p>
           </div>
         </div>
@@ -96,7 +98,7 @@ const InvoicePrint = forwardRef(({ data, items }: any, ref: any) => {
             <p>CUSTOMER SIGNATURE</p>
           </div>
           <div className="sign-box">
-            <div className="sign-line blue-bold"></div>
+            <div className="sign-line"></div>
             <p className="authorized">AUTHORIZED SIGN</p>
           </div>
         </div>

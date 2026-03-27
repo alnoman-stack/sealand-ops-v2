@@ -1,64 +1,41 @@
 'use client'
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import DashboardHome from '@/components/DashboardHome';
 import OrdersView from '@/components/OrdersView';
+import CreateInvoice from '@/components/CreateInvoice';
 import CustomersView from '@/components/CustomersView';
 import ProductsView from '@/components/ProductsView';
-import CreateInvoice from '@/components/CreateInvoice'; // নতুন ইমপোর্ট
-import FileUpload from '@/components/FileUpload'; 
-import { Plus, CreditCard } from 'lucide-react';
+// নিশ্চিত করুন যে SourcingPage ঠিকভাবে ইম্পোর্ট করা হয়েছে
+import SourcingPage from './sourcing/page'; 
 
-export default function Page() {
-  const [view, setView] = useState('dashboard');
-  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+export default function Home() {
+  const [activeView, setActiveView] = useState('dashboard');
+  const [selectedEditOrder, setSelectedEditOrder] = useState(null);
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'dashboard': return <DashboardHome />;
+      case 'orders': 
+        return <OrdersView setView={setActiveView} setSelectedEditOrder={setSelectedEditOrder} />;
+      
+      // এই অংশটি লক্ষ্য করুন: এখানে আগে হয়তো ProductsView ছিল
+      case 'sourcing': 
+        return <SourcingPage />; 
+      
+      case 'create-invoice': 
+        return <CreateInvoice editData={selectedEditOrder} setView={setActiveView} />;
+      case 'customers': return <CustomersView />;
+      case 'products': return <ProductsView />;
+      default: return <DashboardHome />;
+    }
+  };
 
   return (
-    <div className="flex bg-black min-h-screen text-white font-sans selection:bg-blue-500/30">
-      {/* সাইডবার মেনু */}
-      <Sidebar activeView={view} setView={setView} />
-      
-      <main className="flex-1 p-8 overflow-y-auto">
-        {/* টপ বার ও হেডার */}
-        <div className="flex justify-between items-start mb-10">
-          <div>
-            <h1 className="text-3xl font-black uppercase tracking-tighter text-white italic">
-              {view === 'dashboard' ? 'Business Overview' : 
-               view === 'create-invoice' ? 'Generate New Invoice' : 
-               view === 'orders' ? 'Order History' : 
-               view === 'customers' ? 'Customer Management' : 'Product Inventory'}
-            </h1>
-            <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.4em] mt-1">
-              A Commitment to Freshness!
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* CSV ফাইল আপলোড বাটন */}
-            <FileUpload onUploadSuccess={() => window.location.reload()} /> 
-            
-            {view === 'dashboard' && (
-              <>
-                <button 
-                  onClick={() => setView('create-invoice')} // সরাসরি ইনভয়েস পেজে নিয়ে যাবে
-                  className="bg-white text-black px-6 py-3 rounded-xl font-black flex items-center gap-2 hover:bg-gray-200 transition-all active:scale-95"
-                >
-                  <Plus size={18} strokeWidth={3} /> CREATE ORDER
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* মেইন কন্টেন্ট - এখানে ভিউ পরিবর্তন হবে */}
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-          {view === 'dashboard' ? <DashboardHome /> : 
-           view === 'create-invoice' ? <CreateInvoice /> : 
-           view === 'orders' ? <OrdersView /> : 
-           view === 'customers' ? <CustomersView /> : 
-           <ProductsView />}
-        </div>
+    <div className="flex bg-black min-h-screen overflow-hidden">
+      <Sidebar activeView={activeView} setView={setActiveView} />
+      <main className="flex-1 overflow-y-auto">
+        {renderView()}
       </main>
     </div>
   );
