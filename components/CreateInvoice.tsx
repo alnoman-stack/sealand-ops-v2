@@ -13,7 +13,6 @@ export default function InvoiceGenerator() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // ১. নির্ভুল লোকাল তারিখ বের করার ফাংশন (টাইমজোন বাগ ফিক্সড)
   const getLocalDate = () => {
     const now = new Date();
     const offset = now.getTimezoneOffset() * 60000;
@@ -24,7 +23,6 @@ export default function InvoiceGenerator() {
 
   useEffect(() => {
     loadData();
-    // প্রতি এক মিনিট অন্তর তারিখ চেক করা যাতে তারিখ পরিবর্তন হলে আপডেট হয়
     const interval = setInterval(() => {
       const today = getLocalDate();
       if (today !== invoiceDate) {
@@ -92,18 +90,14 @@ export default function InvoiceGenerator() {
 
   const grandTotal = Number(invoiceItems.reduce((sum, item) => sum + item.total, 0).toFixed(2));
 
-  // ২. ইনভয়েস সেভ করার আপডেট লজিক
   const saveInvoice = async () => {
     if (!selectedCustomer || invoiceItems.length === 0) return alert("Select Customer & Add Items!");
     setIsSaving(true);
-    
-    // প্রফেশনাল ইনভয়েস নাম্বার ফরম্যাট (র্যান্ডম হলেও ইউনিক রাখার চেষ্টা)
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
     
     try {
-      // ৩. টাইমস্ট্যাম্প ফিক্স: বর্তমান সময়ের অংশটি নিয়ে ডেট-এর সাথে জোড়া দেওয়া
       const now = new Date();
-      const timePart = now.toISOString().split('T')[1]; // HH:mm:ss.sssZ
+      const timePart = now.toISOString().split('T')[1];
       const finalTimestamp = `${invoiceDate}T${timePart}`;
 
       const { data: invoice, error: invErr } = await supabase
@@ -114,7 +108,7 @@ export default function InvoiceGenerator() {
           customer_address: selectedCustomer.address || '',
           total_amount: grandTotal,
           status: 'pending',
-          created_at: finalTimestamp // এখন এটি সুপাবেসে সঠিক ডেট হিসেবেই যাবে
+          created_at: finalTimestamp
         }])
         .select()
         .single();
@@ -178,101 +172,104 @@ export default function InvoiceGenerator() {
       </div>
 
       {/* ডান পাশ: ইনভয়েস প্রিভিউ */}
-      <div className="flex-1 bg-white text-black rounded-[2.5rem] p-10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col overflow-y-auto custom-scrollbar relative">
+      <div className="flex-1 bg-white text-black rounded-[2.5rem] p-0 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden relative">
         
-        {/* ইনভয়েস হেডার */}
-        <div className="flex justify-between items-start border-b-2 border-gray-100 pb-8 mb-8 shrink-0">
-          <div className="text-left">
-            <h1 className="text-4xl font-black text-blue-900 leading-none italic tracking-tighter">SEALAND AGRO</h1>
-            <p className="text-[11px] text-gray-500 mt-2 uppercase font-black italic tracking-[0.2em]">A Commitment To Freshness!</p>
-            <p className="text-[10px] text-gray-400 w-72 mt-3 font-bold uppercase leading-relaxed">House # 3, Road # Nobinagar 16, Dhaka Uddan, Mohammadpur</p>
-          </div>
-          <div className="text-right flex flex-col items-end gap-3">
-            <h2 className="text-3xl font-black uppercase text-gray-200 leading-none italic">INVOICE</h2>
-            <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 shadow-sm">
-                <CalendarIcon size={14} className="text-blue-600" />
-                <input 
-                    type="date"
-                    value={invoiceDate}
-                    onChange={(e) => setInvoiceDate(e.target.value)}
-                    className="bg-transparent text-xs font-black outline-none cursor-pointer uppercase tracking-tighter"
-                />
-            </div>
-          </div>
-        </div>
-
-        {/* কাস্টমার সিলেকশন */}
-        <div className="mb-6 shrink-0">
-          <select 
-            className="w-full p-5 border-2 border-gray-50 rounded-[1.5rem] font-black outline-none bg-gray-50 text-xs uppercase tracking-widest focus:border-blue-200 transition-all appearance-none shadow-sm cursor-pointer"
-            onChange={(e) => setSelectedCustomer(customers.find(c => c.id === e.target.value))}
-            value={selectedCustomer?.id || ""}
-          >
-            <option value="">-- CHOOSE TARGET CUSTOMER --</option>
-            {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
-          </select>
-        </div>
-
-        {selectedCustomer && (
-          <div className="mb-8 p-6 bg-blue-50/40 rounded-[2rem] border border-blue-100 flex justify-between items-center shrink-0">
+        {/* উপরের কন্টেন্ট (Scrollable) */}
+        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar pb-0">
+          {/* ইনভয়েস হেডার */}
+          <div className="flex justify-between items-start border-b-2 border-gray-100 pb-8 mb-8">
             <div className="text-left">
-              <p className="text-[10px] font-black uppercase text-blue-600 mb-2 tracking-widest italic">Billing Recipient:</p>
-              <p className="text-xl font-black uppercase italic tracking-tight">{selectedCustomer.name}</p>
-              <p className="text-xs text-gray-600 font-bold uppercase mt-1">
-                {selectedCustomer.address || "No Address Found"}
-              </p>
+              <h1 className="text-4xl font-black text-blue-900 leading-none italic tracking-tighter">SEALAND AGRO</h1>
+              <p className="text-[11px] text-gray-500 mt-2 uppercase font-black italic tracking-[0.2em]">A Commitment To Freshness!</p>
+              <p className="text-[10px] text-gray-400 w-72 mt-3 font-bold uppercase leading-relaxed">House # 3, Road # Nobinagar 16, Dhaka Uddan, Mohammadpur</p>
             </div>
-            <div className="text-right">
-                <p className="text-[10px] font-black uppercase text-gray-400 mb-1 tracking-widest">Contact Phone</p>
-                <p className="text-sm font-black tracking-tight text-blue-900">{selectedCustomer.phone}</p>
+            <div className="text-right flex flex-col items-end gap-3">
+              <h2 className="text-3xl font-black uppercase text-gray-100 leading-none italic">INVOICE</h2>
+              <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 shadow-sm">
+                  <CalendarIcon size={14} className="text-blue-600" />
+                  <input 
+                      type="date"
+                      value={invoiceDate}
+                      onChange={(e) => setInvoiceDate(e.target.value)}
+                      className="bg-transparent text-xs font-black outline-none cursor-pointer uppercase tracking-tighter"
+                  />
+              </div>
             </div>
           </div>
-        )}
 
-        {/* টেবিল এরিয়া */}
-        <div className="flex-1 mb-8 min-h-[200px]">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-blue-900 text-white uppercase text-[10px] font-black italic tracking-widest shadow-lg">
-                <th className="p-5 rounded-l-2xl">Cargo Description</th>
-                <th className="p-5 text-center">Qty</th>
-                <th className="p-5 text-right">Unit Price</th>
-                <th className="p-5 text-right">Sub-Total</th>
-                <th className="p-5 text-center rounded-r-2xl">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {invoiceItems.map((item, index) => (
-                <tr key={item.id || index} className="text-xs font-bold hover:bg-gray-50/80 transition-colors group">
-                  <td className="p-5 uppercase text-blue-900 italic font-black">{item.product_name}</td>
-                  <td className="p-5 text-center">
-                    <input 
-                      type="number" 
-                      step="any"
-                      className="w-16 bg-gray-100 border-2 border-transparent rounded-xl p-2 text-center font-black focus:bg-white focus:border-blue-500 transition-all outline-none" 
-                      value={item.qty} 
-                      onChange={(e) => updateQty(index, parseFloat(e.target.value) || 0)}
-                    />
-                  </td>
-                  <td className="p-5 text-right text-gray-500 font-black">{item.unit_price} TK</td>
-                  <td className="p-5 text-right text-blue-600 font-black text-sm italic">{item.total.toLocaleString()} TK</td>
-                  <td className="p-5 text-center">
-                    <button onClick={() => removeItem(index)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {invoiceItems.length === 0 && (
-              <div className="h-32 flex items-center justify-center border-2 border-dashed border-gray-100 rounded-[2rem] mt-4">
-                  <p className="text-[10px] font-black uppercase text-gray-300 tracking-widest italic">No Items Selected For Cargo</p>
+          {/* কাস্টমার সিলেকশন */}
+          <div className="mb-6">
+            <select 
+              className="w-full p-5 border-2 border-gray-50 rounded-[1.5rem] font-black outline-none bg-gray-50 text-xs uppercase tracking-widest focus:border-blue-200 transition-all appearance-none shadow-sm cursor-pointer"
+              onChange={(e) => setSelectedCustomer(customers.find(c => c.id === e.target.value))}
+              value={selectedCustomer?.id || ""}
+            >
+              <option value="">-- CHOOSE TARGET CUSTOMER --</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
+            </select>
+          </div>
+
+          {selectedCustomer && (
+            <div className="mb-8 p-6 bg-blue-50/40 rounded-[2rem] border border-blue-100 flex justify-between items-center">
+              <div className="text-left">
+                <p className="text-[10px] font-black uppercase text-blue-600 mb-2 tracking-widest italic">Billing Recipient:</p>
+                <p className="text-xl font-black uppercase italic tracking-tight">{selectedCustomer.name}</p>
+                <p className="text-xs text-gray-600 font-bold uppercase mt-1">
+                  {selectedCustomer.address || "No Address Found"}
+                </p>
               </div>
+              <div className="text-right">
+                  <p className="text-[10px] font-black uppercase text-gray-400 mb-1 tracking-widest">Contact Phone</p>
+                  <p className="text-sm font-black tracking-tight text-blue-900">{selectedCustomer.phone}</p>
+              </div>
+            </div>
           )}
+
+          {/* টেবিল এরিয়া */}
+          <div className="mb-8">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-blue-900 text-white uppercase text-[10px] font-black italic tracking-widest shadow-lg">
+                  <th className="p-5 rounded-l-2xl">Cargo Description</th>
+                  <th className="p-5 text-center">Qty</th>
+                  <th className="p-5 text-right">Unit Price</th>
+                  <th className="p-5 text-right">Sub-Total</th>
+                  <th className="p-5 text-center rounded-r-2xl">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {invoiceItems.map((item, index) => (
+                  <tr key={item.id || index} className="text-xs font-bold hover:bg-gray-50/80 transition-colors group">
+                    <td className="p-5 uppercase text-blue-900 italic font-black">{item.product_name}</td>
+                    <td className="p-5 text-center">
+                      <input 
+                        type="number" 
+                        step="any"
+                        className="w-16 bg-gray-100 border-2 border-transparent rounded-xl p-2 text-center font-black focus:bg-white focus:border-blue-500 transition-all outline-none" 
+                        value={item.qty} 
+                        onChange={(e) => updateQty(index, parseFloat(e.target.value) || 0)}
+                      />
+                    </td>
+                    <td className="p-5 text-right text-gray-500 font-black">{item.unit_price} TK</td>
+                    <td className="p-5 text-right text-blue-600 font-black text-sm italic">{item.total.toLocaleString()} TK</td>
+                    <td className="p-5 text-center">
+                      <button onClick={() => removeItem(index)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {invoiceItems.length === 0 && (
+                <div className="h-32 flex items-center justify-center border-2 border-dashed border-gray-100 rounded-[2rem] mt-4">
+                    <p className="text-[10px] font-black uppercase text-gray-300 tracking-widest italic">No Items Selected For Cargo</p>
+                </div>
+            )}
+          </div>
         </div>
 
-        {/* গ্র্যান্ড টোটাল ও বাটন */}
-        <div className="mt-auto shrink-0 border-t-4 border-double border-gray-100 pt-8">
-          <div className="flex justify-between items-end mb-8">
+        {/* নিচের ফিক্সড সেকশন (টোটাল ও বাটন) */}
+        <div className="shrink-0 border-t-4 border-double border-gray-100 p-10 pt-6 bg-white z-10">
+          <div className="flex justify-between items-end mb-6">
             <div className="text-left">
                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic mb-2">Sea-Land Agro Digital Signature</p>
                  <div className="w-32 h-1 border-b-2 border-gray-100"></div>
@@ -283,7 +280,7 @@ export default function InvoiceGenerator() {
             </div>
           </div>
 
-          <div className="flex gap-4 no-print mb-4">
+          <div className="flex gap-4 no-print">
             <button 
               onClick={saveInvoice} 
               disabled={isSaving}
