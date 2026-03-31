@@ -1,9 +1,15 @@
 'use client'
 import { useState } from 'react';
 import { useDashboardData } from '@/hooks/useDashboardData';
-// এখানে 'lucide-center' এর বদলে 'lucide-react' হবে
-import { Clock, ArrowRight, Users, CreditCard, Search, Tag, RefreshCcw, Hash, Calendar } from 'lucide-react'; 
+import { 
+  Clock, ArrowRight, Users, CreditCard, Search, Tag, RefreshCcw, 
+  TrendingUp, TrendingDown, PieChart, BarChart3
+} from 'lucide-react'; 
 import PaymentModal from './PaymentModal'; 
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer
+} from 'recharts';
 
 export default function DashboardHome() {
   const getToday = () => new Date().toLocaleDateString('en-CA'); 
@@ -12,7 +18,29 @@ export default function DashboardHome() {
   const [isPayModalOpen, setIsPayModalOpen] = useState(false); 
   const [searchTerm, setSearchTerm] = useState(''); 
 
-  const { stats, dueInvoices, customerSummary, isSyncing, refresh } = useDashboardData(startDate, endDate);
+  const { 
+    stats, 
+    dueInvoices, 
+    customerSummary, 
+    salesGrowth,       
+    productRanking, 
+    isSyncing, 
+    refresh 
+  } = useDashboardData(startDate, endDate);
+
+  // --- Financial Logic (Updated) ---
+  // ১. মোট বিক্রয় থেকে অ্যাডজাস্টমেন্ট বাদ দেওয়ার পর যা পাওয়ার কথা
+  const totalRevenue = stats.received + stats.totalDiscount; 
+  const totalExpenses = stats.totalExpense || 0; 
+  
+  // ২. প্রকৃত লাভ (নগদ প্রাপ্তি - খরচ)
+  const netProfit = stats.received - totalExpenses;
+  
+  // ৩. ভেন্ডর বকেয়া (Hooks থেকে সরাসরি কানেক্ট করা হয়েছে)
+  const vendorPayable = stats.totalVendorDue || 0; 
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const maxVal = productRanking.length > 0 ? Math.max(...productRanking.map(p => p.actualValue)) : 1;
 
   const filteredDueInvoices = dueInvoices.filter(inv => 
     inv.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -24,7 +52,10 @@ export default function DashboardHome() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-black uppercase italic tracking-tighter">SeaLand Operations</h2>
+          <div className="bg-orange-600 p-2 rounded-lg rotate-3">
+            <TrendingUp size={20} className="text-black" />
+          </div>
+          <h2 className="text-2xl font-black uppercase italic tracking-tighter">SeaLand Admin Hub</h2>
           {isSyncing && <RefreshCcw size={16} className="animate-spin text-green-500" />}
         </div>
         
@@ -33,60 +64,129 @@ export default function DashboardHome() {
             onClick={() => setIsPayModalOpen(true)} 
             className="bg-green-600 hover:bg-green-500 text-black px-6 py-2.5 rounded-xl font-black uppercase text-[10px] flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-900/20"
           >
-            <CreditCard size={16} /> Make Payment
+            <CreditCard size={16} /> Customer Payment
           </button>
           
-          <div className="flex items-center gap-2 bg-[#0a0a0a] p-2 rounded-xl border border-gray-900 shadow-inner">
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={(e) => setStartDate(e.target.value)} 
-              className="bg-transparent text-white text-[10px] outline-none uppercase font-bold cursor-pointer" 
-            />
+          <div className="flex items-center gap-2 bg-[#0a0a0a] p-2 rounded-xl border border-gray-900">
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-white text-[10px] outline-none uppercase font-bold cursor-pointer [color-scheme:dark]" />
             <ArrowRight size={12} className="text-gray-700" />
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={(e) => setEndDate(e.target.value)} 
-              className="bg-transparent text-white text-[10px] outline-none uppercase font-bold cursor-pointer" 
-            />
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent text-white text-[10px] outline-none uppercase font-bold cursor-pointer [color-scheme:dark]" />
           </div>
         </div>
       </div>
 
       {/* Main Container */}
       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-6 min-h-0 overflow-hidden pb-4">
-        
-        {/* Left Side: Stats & Overdue Invoices */}
-        <div className="col-span-1 md:col-span-12 lg:col-span-7 flex flex-col gap-6 h-full min-h-0">
+        <div className="col-span-1 md:col-span-12 lg:col-span-8 flex flex-col gap-6 h-full min-h-0 overflow-y-auto no-scrollbar">
           
-          {/* Summary Stats Card */}
-          <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2rem] overflow-hidden shadow-2xl shrink-0">
-            <table className="w-full text-left">
-              <tbody className="divide-y divide-gray-900/50">
-                <StatRow label="Gross Sales" value={stats.totalSell} />
-                <StatRow label="Cash Received" value={stats.received} color="text-green-500" />
-                <StatRow label="Adjustments" value={stats.totalDiscount} color="text-orange-500" prefix="-" />
-                <StatRow label="Net Outstanding" value={stats.due} color="text-red-500" isLast />
-              </tbody>
-            </table>
+          {/* Stats Cards - Updated with Adjustment Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 shrink-0">
+              <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2rem] overflow-hidden shadow-2xl">
+                <table className="w-full text-left">
+                  <tbody className="divide-y divide-gray-900/50">
+                    <StatRow label="Gross Sales" value={stats.totalSell} />
+                    <StatRow label="Cash Received" value={stats.received} color="text-green-500" />
+                    
+                    {/* Adjustment Row (নতুন যোগ করা হয়েছে) */}
+                    <StatRow label="Adjustment / Damage" value={stats.totalDiscount} color="text-yellow-500" />
+                    
+                    <StatRow label="Net Outstanding (Cust.)" value={stats.due} color="text-red-500" />
+                    <StatRow label="Vendor Payable (Due)" value={vendorPayable} color="text-orange-500" isLast />
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2rem] p-6 shadow-2xl flex flex-col justify-between border-t-blue-900/30">
+                <div>
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <PieChart size={14} className="text-blue-500" /> Financial Health (Real-time)
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-gray-500 text-[11px] font-bold italic">
+                      <span>Total Revenue</span>
+                      <span className="text-white">{totalRevenue.toLocaleString()} /-</span>
+                    </div>
+                    <div className="flex justify-between items-center text-gray-500 text-[11px] font-bold italic">
+                      <span>Total Expenses</span>
+                      <span className="text-white">{totalExpenses.toLocaleString()} /-</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className={`mt-6 p-4 rounded-2xl border ${netProfit >= 0 ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                   <div className="flex justify-between items-end">
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-black uppercase tracking-tighter text-gray-400">Net Profit / Loss</span>
+                        <div className={`text-3xl font-black italic tracking-tighter ${netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {netProfit.toLocaleString()} <span className="text-xs font-normal">BDT</span>
+                        </div>
+                      </div>
+                      {netProfit >= 0 ? <TrendingUp size={24} className="text-green-500 mb-1" /> : <TrendingDown size={24} className="text-red-500 mb-1" />}
+                   </div>
+                </div>
+              </div>
           </div>
 
-          {/* Overdue Invoices */}
-          <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] p-6 flex flex-col shadow-2xl flex-1 min-h-0"> 
-            <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2 shrink-0">
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 shrink-0">
+            <div className="md:col-span-2 bg-[#0a0a0a] border border-gray-900 rounded-[2rem] p-6 h-[250px]">
+              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <TrendingUp size={14} className="text-blue-500" /> Weekly Sales Growth
+              </h3>
+              <ResponsiveContainer width="100%" height="80%">
+                <LineChart data={salesGrowth}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
+                  <XAxis dataKey="name" stroke="#555" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '12px', fontSize: '10px' }} itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }} />
+                  <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={4} dot={{ fill: '#3b82f6', r: 4 }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2rem] p-6 h-[250px]">
+              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <BarChart3 size={14} className="text-green-500" /> Top Products (30D)
+              </h3>
+              <div className="space-y-4 mt-2 overflow-y-auto no-scrollbar h-[80%]">
+                {productRanking.length > 0 ? productRanking.map((item, index) => (
+                  <div key={index} className="flex flex-col gap-1.5">
+                    <div className="flex justify-between items-center text-[10px] font-bold italic uppercase text-gray-400">
+                      <span className="truncate max-w-[120px]">{item.name}</span>
+                      <span className="text-white whitespace-nowrap">
+                        {item.actualValue} <span className="text-[8px] text-gray-600">{item.unit || 'KG'}</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-900 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all duration-1000 ease-out" 
+                        style={{ 
+                          width: `${(item.actualValue / maxVal) * 100}%`, 
+                          backgroundColor: COLORS[index % COLORS.length] 
+                        }}
+                      />
+                    </div>
+                  </div>
+                )) : (
+                  <div className="h-full flex items-center justify-center text-[10px] text-gray-600 italic uppercase">No Data Found</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Overdue Invoices Section */}
+          <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] p-6 flex flex-col shadow-2xl shrink-0 min-h-[300px]"> 
+            <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2">
               <Clock size={14} className="text-red-500" /> 
               Overdue Invoices <span className="text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full ml-1">[{filteredDueInvoices.length}]</span>
             </h3>
-            <div className="overflow-y-auto no-scrollbar space-y-3 pr-1 flex-1">
+            <div className="space-y-3">
               {filteredDueInvoices.map((inv, i) => (
-                <div key={i} className="flex justify-between items-center p-5 bg-white/[0.02] border border-gray-900/50 rounded-2xl hover:border-red-900/30 hover:bg-white/[0.04] transition-all group">
-                  <div className="space-y-1 text-left">
-                    <div className="text-sm font-bold uppercase italic text-gray-200 group-hover:text-white transition-colors">{inv.customer_name}</div>
-                    <div className="text-[9px] text-gray-600 font-bold italic flex gap-2">
-                      <span><Hash size={10} className="inline mr-1"/>{inv.invoice_number || 'N/A'}</span>
-                      <span>|</span>
-                      <span><Calendar size={10} className="inline mr-1"/>{new Date(inv.created_at).toLocaleDateString()}</span>
+                <div key={i} className="flex justify-between items-center p-5 bg-white/[0.02] border border-gray-900/50 rounded-2xl hover:border-red-900/30 transition-all group">
+                  <div className="space-y-1">
+                    <div className="text-sm font-bold uppercase italic text-gray-200 group-hover:text-white">{inv.customer_name}</div>
+                    <div className="text-[9px] text-gray-600 font-bold italic flex gap-2 uppercase">
+                      <span>#{inv.invoice_number}</span> | 
+                      <span>{inv.created_at.split('T')[0].split('-').reverse().join('/')}</span>
                     </div>
                   </div>
                   <div className="text-red-500 font-black italic text-xl tracking-tighter">
@@ -99,32 +199,26 @@ export default function DashboardHome() {
         </div>
 
         {/* Right Side: Customer Ledger */}
-        <div className="col-span-1 md:col-span-12 lg:col-span-5 h-full min-h-0">
+        <div className="col-span-1 md:col-span-12 lg:col-span-4 h-full min-h-0">
           <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden h-full">
-            <div className="p-7 border-b border-gray-900/50 bg-[#0d0d0d]/50 backdrop-blur-md shrink-0">
+            <div className="p-7 border-b border-gray-900/50 bg-[#0d0d0d]/50 shrink-0">
               <div className="flex items-center justify-between">
-                <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-3 text-white/80">
+                <h3 className="text-[11px] font-black text-white/80 uppercase tracking-widest flex items-center gap-3">
                   <Users size={18} className="text-green-500" /> Customer Ledger
                 </h3>
-                <div className="relative group">
+                <div className="relative">
                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-                   <input 
-                    type="text" 
-                    placeholder="Search..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-black border border-gray-800 rounded-xl py-2 pl-10 pr-4 text-[11px] text-white outline-none w-28 focus:w-40 transition-all font-bold placeholder:text-gray-700"
-                   />
+                   <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-black border border-gray-800 rounded-xl py-2 pl-10 pr-4 text-[11px] text-white outline-none w-28 focus:w-40 transition-all font-bold placeholder:text-gray-700 uppercase" />
                 </div>
               </div>
             </div>
             
-            <div className="overflow-y-auto no-scrollbar flex-1 min-h-0">
-              <table className="w-full text-left border-collapse text-[12px]">
+            <div className="overflow-y-auto no-scrollbar flex-1">
+              <table className="w-full text-[12px]">
                 <thead className="sticky top-0 bg-[#0d0d0d] z-10 border-b border-gray-900">
                   <tr>
-                    <th className="px-8 py-5 text-[10px] font-black text-gray-600 uppercase italic text-left">Customer Name</th>
-                    <th className="px-8 py-5 text-right text-[10px] font-black text-gray-600 uppercase italic">Balance Due</th>
+                    <th className="px-8 py-5 text-[10px] font-black text-gray-600 uppercase italic text-left">Customer</th>
+                    <th className="px-8 py-5 text-right text-[10px] font-black text-gray-600 uppercase italic">Balance</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-900/50">
@@ -132,11 +226,11 @@ export default function DashboardHome() {
                     .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
                     .map((c, i) => (
                     <tr key={i} className="hover:bg-white/[0.03] transition-all group">
-                      <td className="px-8 py-4 text-left">
-                        <div className="font-bold text-gray-400 uppercase italic group-hover:text-white transition-colors">{c.name}</div>
+                      <td className="px-8 py-4">
+                        <div className="font-bold text-gray-400 uppercase italic group-hover:text-white">{c.name}</div>
                         {c.lastPayment && (
                           <div className="text-[8px] text-blue-500 font-black mt-1 uppercase flex items-center gap-1">
-                            <Tag size={8} /> Last Paid: {new Date(c.lastPayment).toLocaleDateString()}
+                            <Tag size={8} /> {new Date(c.lastPayment).toLocaleDateString()}
                           </div>
                         )}
                       </td>
@@ -162,9 +256,10 @@ export default function DashboardHome() {
   );
 }
 
+// StatRow Component
 function StatRow({ label, value, color = "text-white", prefix = "", isLast = false }: any) {
   return (
-    <tr className={`hover:bg-white/[0.02] transition-colors ${isLast ? 'bg-red-500/[0.03]' : ''}`}>
+    <tr className={`hover:bg-white/[0.02] transition-colors ${isLast ? 'bg-orange-500/10 border-l-2 border-l-orange-500' : ''}`}>
       <td className="p-5 lg:p-6 font-bold text-gray-500 italic text-[10px] uppercase tracking-wider">{label}</td>
       <td className={`p-5 lg:p-6 text-right font-black text-xl lg:text-3xl italic tracking-tighter ${color}`}>
         {prefix} {Math.max(0, value).toLocaleString()}/-

@@ -15,7 +15,7 @@ export default function FileUpload({ onUploadSuccess }: { onUploadSuccess: () =>
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: async (results) => {
+      complete: async (results: any) => {
         try {
           const rawData = results.data.map((item: any) => ({
             name_en: item['product name']?.trim(),

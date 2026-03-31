@@ -1,15 +1,21 @@
+interface CartItem {
+  id: any;
+  name_en: string;
+  price: number;
+  qty: number;
+}
 'use client'
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Trash2, Printer, User, Phone } from 'lucide-react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
-export default function BillingCart({ cart, setCart }) {
+export default function BillingCart({ cart, setCart }: { cart: CartItem[], setCart: any }) {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
 
-  const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const total = cart.reduce((sum: number, item: CartItem) => sum + (item.price * item.qty), 0);
 
   const handlePrint = async () => {
     if (cart.length === 0) return alert("Cart is empty!");
@@ -46,7 +52,7 @@ export default function BillingCart({ cart, setCart }) {
 
     const tableData = cart.map(item => [item.name_en, `${item.price} TK`, item.qty, `${item.price * item.qty} TK`]);
     
-    doc.autoTable({
+    autoTable(doc,{
       startY: 75,
       head: [['Product', 'Price', 'Qty', 'Subtotal']],
       body: tableData,
@@ -54,7 +60,7 @@ export default function BillingCart({ cart, setCart }) {
       headStyles: { fillColor: [34, 197, 94] }
     });
 
-    doc.text(`Total Amount: ${total} TK`, 140, doc.lastAutoTable.finalY + 15);
+    doc.text(`Total Amount: ${total} TK`, 140, (doc as any).lastAutoTable.finalY + 15);
     doc.save(`Invoice_${invoiceId}.pdf`);
 
     // ৩. কাজ শেষ হলে সব পরিষ্কার করা
@@ -96,7 +102,7 @@ export default function BillingCart({ cart, setCart }) {
 
       {/* কার্ট আইটেম লিস্ট */}
       <div className="flex-1 space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-        {cart.map((item) => (
+        {cart.map((item: CartItem) => (
           <div key={item.id} className="flex justify-between items-center group bg-white/5 p-3 rounded-2xl border border-transparent hover:border-gray-800 transition-all">
             <div>
               <p className="font-bold text-sm">{item.name_en}</p>

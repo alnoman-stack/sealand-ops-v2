@@ -7,7 +7,12 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Eye, Edit, Trash2, FileText, Printer, X, Save, Search, Plus, Download, Calendar as CalendarIcon, Loader2, Hash, Banknote } from 'lucide-react';
 
-export default function OrdersView() {
+interface OrdersViewProps {
+  setView: (view: string) => void;
+  setSelectedEditOrder: (order: any) => void;
+}
+
+export default function OrdersView({ setView, setSelectedEditOrder }: OrdersViewProps) {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [orderItems, setOrderItems] = useState<any[]>([]);
@@ -37,43 +42,41 @@ export default function OrdersView() {
     documentTitle: `Invoice_${selectedOrder?.invoice_number || 'Order'}`,
   });
 
-  // পিডিএফ ডাউনলোড হ্যান্ডলার (FIXED)
+  // পিডিএফ ডাউনলোড হ্যান্ডলার
   const handleDownloadPDF = async () => {
-  const element = printRef.current;
-  if (!element || isDownloading) return;
-  setIsDownloading(true);
+    const element = printRef.current;
+    if (!element || isDownloading) return;
+    setIsDownloading(true);
 
-  try {
-    const canvas = await html2canvas(element, {
-      scale: 2, // ৩ এর বদলে ২ ব্যবহার করুন, এতে মেমরি কম খরচ হবে এবং ক্রাশ করবে না
-      useCORS: true,
-      backgroundColor: "#ffffff", // সাদা ব্যাকগ্রাউন্ড নিশ্চিত করুন
-      logging: false,
-      onclone: (clonedDoc) => {
-        // ক্লোন করা ডকুমেন্টের সব ইলিমেন্ট থেকে আধুনিক কালার স্টাইল মুছে ফেলা
-        const invoiceEl = clonedDoc.body;
-        invoiceEl.style.colorScheme = 'light';
-        // সব টেক্সট এবং ব্যাকগ্রাউন্ড কালারকে ফোর্স করা
-        invoiceEl.querySelectorAll('*').forEach((el: any) => {
-          el.style.colorInterpolationFilters = 'sRGB';
-        });
-      }
-    });
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        onclone: (clonedDoc) => {
+          const invoiceEl = clonedDoc.body;
+          invoiceEl.style.colorScheme = 'light';
+          invoiceEl.querySelectorAll('*').forEach((el: any) => {
+            el.style.colorInterpolationFilters = 'sRGB';
+          });
+        }
+      });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.8); // PNG এর বদলে JPEG ও কম কোয়ালিটি (০.৮) দিলে এরর কম হয়
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const imgData = canvas.toDataURL('image/jpeg', 0.8);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Invoice_${selectedOrder?.invoice_number || 'Order'}.pdf`);
-  } catch (error) {
-    console.error("PDF generation failed:", error);
-    alert("সফটওয়্যারটি আপনার ব্রাউজারের কালার সাপোর্ট করতে পারছে না। অনুগ্রহ করে সাধারণ সিএসএস ব্যবহার করুন।");
-  } finally {
-    setIsDownloading(false);
-  }
-};
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Invoice_${selectedOrder?.invoice_number || 'Order'}.pdf`);
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      alert("সফটওয়্যারটি আপনার ব্রাউজারের কালার সাপোর্ট করতে পারছে না।");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -203,7 +206,7 @@ export default function OrdersView() {
       }));
       const { error: insErr } = await supabase.from('invoice_items').insert(toInsert);
       if (insErr) throw insErr;
-      alert("সফলভাবে আপডেট হয়েছে!");
+      alert("সফলভাবে আপডেট হয়েছে!");
       setIsEditModalOpen(false);
       fetchOrders(); 
     } catch (e: any) { 
@@ -236,7 +239,7 @@ export default function OrdersView() {
               <div className="flex items-center gap-2 mt-1">
                 <span className="w-2 h-2 rounded-full bg-green-500"></span>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">
-                  Matches: <span className="text-blue-500 ml-1">{filteredOrders.length} Invoices</span>
+                  Matches: <span className="text-blue-500 ml-1">{filteredOrders.length} Invoices Found</span>
                 </p>
               </div>
             </div>
@@ -266,15 +269,32 @@ export default function OrdersView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/5">
-          <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center border border-green-500/20">
-            <Banknote className="text-green-500" size={24} />
+        {/* Summary Cards: Total Sales & Total Orders Count */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Total Sales Card */}
+          <div className="flex items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/5">
+            <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center border border-green-500/20">
+              <Banknote className="text-green-500" size={24} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Total Sales (Selected Filters)</p>
+              <p className="text-2xl font-black text-white italic">
+                {dailyTotal.toLocaleString()} <span className="text-xs text-green-500 not-italic uppercase ml-1">BDT</span>
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Total Sales (Selected Filters)</p>
-            <p className="text-2xl font-black text-white italic">
-              {dailyTotal.toLocaleString()} <span className="text-xs text-green-500 not-italic uppercase ml-1">BDT</span>
-            </p>
+
+          {/* NEW: Total Orders Card (Calendar Replacement Design) */}
+          <div className="flex items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/5">
+            <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
+              <Hash className="text-blue-500" size={24} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Total Orders on {formatDisplayDate(selectedDate)}</p>
+              <p className="text-2xl font-black text-white italic">
+                {filteredOrders.length} <span className="text-xs text-blue-500 not-italic uppercase ml-1">Invoices</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -342,7 +362,7 @@ export default function OrdersView() {
         </div>
       )}
 
-      {/* Edit Modal (Keeping your logic same, just integrated) */}
+      {/* Edit Modal */}
       {isEditModalOpen && selectedOrder && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/98 backdrop-blur-2xl p-4">
           <div className="bg-[#0a0a0a] border border-gray-900 w-full max-w-[95vw] h-[92vh] rounded-[3rem] flex flex-col overflow-hidden">
@@ -424,7 +444,7 @@ export default function OrdersView() {
         </div>
       )}
 
-      {/* Hidden Container for Print & PDF (FIXED) */}
+      {/* Hidden Container for Print & PDF */}
       <div className="hidden">
         <div ref={printRef}>
           {selectedOrder && (

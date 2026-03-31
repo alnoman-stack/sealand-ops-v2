@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { UserPlus, Trash2, Loader2, Search, MapPin, Phone, Users, Edit2, Check, X } from 'lucide-react';
 
 export default function CustomersView() {
-  const [customers, setCustomers] = useState([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');

@@ -15,7 +15,7 @@ export default function CSVUploader({ onRefresh }: { onRefresh: () => void }) {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: async (results) => {
+      complete: async (results: any) => {
         // ডেটাবেজে আপলোড (upsert ব্যবহার করলে আগের ডেটা থাকলে আপডেট হবে, না থাকলে নতুন তৈরি হবে)
         const { error } = await supabase
           .from('products') 

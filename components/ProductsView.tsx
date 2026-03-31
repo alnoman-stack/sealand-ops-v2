@@ -5,7 +5,7 @@ import { Package, Search, Hash, Loader2, ChevronRight } from 'lucide-react';
 import FileUpload from './FileUpload'; 
 
 export default function ProductsView() {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 

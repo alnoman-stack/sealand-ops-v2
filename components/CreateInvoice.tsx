@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Search, Plus, Trash2, Save, Printer, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 
-export default function InvoiceGenerator() {
+export default function CreateInvoice({ editData, setView }: { editData: any, setView: any }) {
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
@@ -100,13 +100,16 @@ export default function InvoiceGenerator() {
       const timePart = now.toISOString().split('T')[1];
       const finalTimestamp = `${invoiceDate}T${timePart}`;
 
+      // ১. ইনভয়েস মেইন ডাটা সেভ (সাথে due_amount সেট করা)
       const { data: invoice, error: invErr } = await supabase
         .from('invoices')
         .insert([{
           invoice_number: invoiceNumber,
           customer_name: selectedCustomer.name,
+          customer_phone: selectedCustomer.phone, // নতুন যোগ করা
           customer_address: selectedCustomer.address || '',
           total_amount: grandTotal,
+          due_amount: grandTotal, // শুরুতে পুরো টাকাটাই ডিউ হিসেবে থাকবে
           status: 'pending',
           created_at: finalTimestamp
         }])
@@ -115,24 +118,40 @@ export default function InvoiceGenerator() {
 
       if (invErr) throw invErr;
 
-      const itemsToInsert = invoiceItems.map(item => ({
-        invoice_id: invoice.id,
-        product_name: item.product_name,
-        qty: item.qty,
-        unit_price: item.unit_price,
-        total: item.total
-      }));
+      // ২. লুপ চালিয়ে আইটেম সেভ এবং স্টক আপডেট
+      for (const item of invoiceItems) {
+        // আইটেম ইনসার্ট
+        const { error: itemErr } = await supabase.from('invoice_items').insert({
+          invoice_id: invoice.id,
+          product_name: item.product_name,
+          qty: item.qty,
+          unit_price: item.unit_price,
+          total: item.total
+        });
+        if (itemErr) throw itemErr;
 
-      const { error: itemErr } = await supabase.from('invoice_items').insert(itemsToInsert);
-      if (itemErr) throw itemErr;
+        // ৩. স্টক আপডেট (Decrementing current_stock)
+        const { data: productData } = await supabase
+          .from('products')
+          .select('current_stock')
+          .ilike('name_en', item.product_name)
+          .single();
 
-      alert("Invoice Saved Successfully: " + invoiceNumber);
+        const updatedStock = (productData?.current_stock || 0) - item.qty;
+
+        await supabase
+          .from('products')
+          .update({ current_stock: updatedStock })
+          .eq('name_en', item.product_name);
+      }
+
+      alert("Invoice Saved & Inventory Updated: " + invoiceNumber);
       setInvoiceItems([]);
       setSelectedCustomer(null);
       
     } catch (err: any) {
       console.error("Save Error:", err);
-      alert("Error saving invoice: " + err.message);
+      alert("Error saving: " + err.message);
     } finally {
       setIsSaving(false);
     }
