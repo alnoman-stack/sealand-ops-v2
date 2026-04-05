@@ -210,7 +210,7 @@ export default function ExpenseManager() {
                               </button>
                             </>
                           ) : (
-                            <AlertCircle size={16} className="opacity-20" title="Manage via Vendor" />
+                            <AlertCircle size={16} className="opacity-20" />
                           )}
                         </div>
                       </td>
