@@ -115,7 +115,7 @@ export default function VendorLedgerModal({ isOpen, onClose, vendor }: any) {
       head: [['DATE', 'DESCRIPTION', 'DEBIT (BILL)', 'CREDIT (PAID)']],
       body: tableData,
       theme: 'striped',
-      headStyles: { fillColor: COMPANY.brandColor },
+      headStyles: { fillColor: COMPANY.brandColor as [number, number, number] },
       styles: { fontSize: 8 },
       columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } }
     });
