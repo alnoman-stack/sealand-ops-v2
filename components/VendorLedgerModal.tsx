@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { X, Download, Loader2, Calendar, Filter } from 'lucide-react';
+import { X, Download, Loader2, Calendar, Filter, Edit2, Trash2, Check, RotateCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -9,11 +9,29 @@ export default function VendorLedgerModal({ isOpen, onClose, vendor }: any) {
   const [ledger, setLedger] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // তারিখ ফিল্টার (ডিফল্ট: গত ৩০ দিন)
-  const [startDate, setStartDate] = useState(
-    new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]
-  );
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [editingKey, setEditingKey] = useState<string | null>(null); 
+  const [editValue, setEditValue] = useState<number>(0);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
+
+  const COMPANY = {
+    name: 'SEALAND AGRO',
+    slogan: 'A COMMITMENT TO TRANSPARENCY',
+    brandColor: [247, 108, 33] 
+  };
+
+  const getLocalDate = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - offset).toISOString().split('T')[0];
+  };
+
+  const getFirstDayOfMonth = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 2).toISOString().split('T')[0];
+  };
+
+  const [startDate, setStartDate] = useState(getFirstDayOfMonth());
+  const [endDate, setEndDate] = useState(getLocalDate());
 
   const fetchLedger = async () => {
     if (!vendor?.id) return;
@@ -40,154 +58,221 @@ export default function VendorLedgerModal({ isOpen, onClose, vendor }: any) {
     if (isOpen) fetchLedger();
   }, [isOpen, vendor, startDate, endDate]);
 
-  // প্রফেশনাল PDF জেনারেশন ফাংশন (স্লোগানসহ)
   const generatePDF = () => {
-    if (ledger.length === 0) {
-      alert("No data available to export!");
-      return;
-    }
-
+    if (!vendor || ledger.length === 0) return;
     const doc = new jsPDF();
     
-    // ১. ব্র্যান্ডিং হেডার (Orange Theme)
-    doc.setFillColor(234, 88, 12); 
-    doc.rect(0, 0, 210, 45, 'F'); 
+    doc.setFillColor(COMPANY.brandColor[0], COMPANY.brandColor[1], COMPANY.brandColor[2]);
+    doc.rect(0, 0, 210, 45, 'F');
     
-    doc.setTextColor(255, 255, 255);
     doc.setFontSize(26);
     doc.setFont("helvetica", "bold");
-    doc.text("SEALAND AGRO", 14, 20);
+    doc.setTextColor(255, 255, 255);
+    doc.text(COMPANY.name, 14, 22);
     
-    // স্লোগান যুক্ত করা
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "italic");
-    doc.text("A COMMITMENT TO TRANSPARENCY", 14, 28);
-    
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("VENDOR TRANSACTION STATEMENT", 14, 38);
+    doc.text(COMPANY.slogan, 14, 30);
+    doc.text("VENDOR TRANSACTION STATEMENT", 14, 40);
 
-    // ২. সাপ্লায়ার ও রিপোর্ট ইনফো
-    doc.setTextColor(40, 40, 40);
     doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0); 
     doc.setFont("helvetica", "bold");
     doc.text(`SUPPLIER: ${vendor.name.toUpperCase()}`, 14, 55);
-    
-    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.text(`Contact: ${vendor.phone || 'N/A'}`, 14, 61);
-    doc.text(`Period: ${startDate} to ${endDate}`, 140, 55);
-    doc.text(`Status: ${vendor.current_due > 0 ? 'DUE OUTSTANDING' : 'CLEAR'}`, 140, 61);
 
-    // ৩. সামারি টেবিল
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Period: ${startDate} to ${endDate}`, 196, 55, { align: 'right' });
+    
+    const totalDue = vendor.current_due || 0;
+    doc.text(`Total Balance Due: BDT ${totalDue.toLocaleString()}`, 196, 61, { align: 'right' });
+
     autoTable(doc, {
-      startY: 70,
-      head: [['TOTAL BILL', 'TOTAL PAID', 'TOTAL DUE']],
-      body: [[`BDT ${vendor.total_purchased}`, `BDT ${vendor.total_paid}`, `BDT ${vendor.current_due}`]],
+      startY: 68,
+      margin: { left: 14, right: 14 },
+      head: [['TOTAL BILL', 'TOTAL PAID', 'CLOSING DUE']],
+      body: [[
+        `BDT ${ledger.reduce((sum, r) => sum + (r.debit || 0), 0).toLocaleString()}`,
+        `BDT ${ledger.reduce((sum, r) => sum + (r.credit || 0), 0).toLocaleString()}`,
+        `BDT ${totalDue.toLocaleString()}`
+      ]],
       theme: 'grid',
-      headStyles: { fillColor: [40, 40, 40], halign: 'center' },
-      styles: { halign: 'center', fontSize: 10, fontStyle: 'bold' },
+      headStyles: { fillColor: [51, 51, 51], halign: 'center' },
+      styles: { halign: 'center', fontSize: 12, fontStyle: 'bold' }
     });
 
-    // ৪. লেনদেনের মেইন টেবিল (History Log)
-    const tableRows = ledger.map(item => [
-      item.date,
-      item.description.toUpperCase(),
-      item.debit > 0 ? `${item.debit}` : '-',
-      item.credit > 0 ? `${item.credit}` : '-'
+    const tableData = ledger.map(row => [
+      row.date,
+      row.description.toUpperCase(),
+      row.debit > 0 ? row.debit.toLocaleString() : '-',
+      row.credit > 0 ? row.credit.toLocaleString() : '-'
     ]);
 
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 10,
       head: [['DATE', 'DESCRIPTION', 'DEBIT (BILL)', 'CREDIT (PAID)']],
-      body: tableRows,
+      body: tableData,
       theme: 'striped',
-      headStyles: { fillColor: [234, 88, 12] },
+      headStyles: { fillColor: COMPANY.brandColor },
       styles: { fontSize: 8 },
-      columnStyles: {
-        2: { halign: 'right' },
-        3: { halign: 'right' }
-      }
+      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } }
     });
 
-    // ৫. ফুটার
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("This is a computer-generated report from SeaLand Agro Management Portal.", 14, finalY);
+    doc.save(`${vendor.name}_Statement.pdf`);
+  };
 
-    doc.save(`Statement_${vendor.name}_${startDate}.pdf`);
+  // --- ডাটা আপডেট লজিক (Due Adjustment সহ) ---
+  const handleUpdate = async (row: any, rowKey: string) => {
+    if (!row.id) return;
+    setIsProcessing(rowKey);
+    try {
+      const isPurchase = row.debit > 0;
+      if (isPurchase) {
+        // পারচেজ আপডেট করলে due_amount ও আপডেট হবে
+        await supabase.from('purchases').update({ 
+          total_amount: editValue,
+          due_amount: editValue // এডিট করলে ডিউ নতুন টোটাল হয়ে যাবে (পেমেন্ট লজিক পরে অ্যাডজাস্ট হবে)
+        }).eq('id', row.id);
+      } else {
+        await supabase.from('vendor_payments').update({ amount_paid: editValue }).eq('id', row.id);
+      }
+
+      setEditingKey(null);
+      await fetchLedger();
+    } catch (err: any) {
+      alert("Update failed: " + err.message);
+    } finally {
+      setIsProcessing(null);
+    }
+  };
+
+  const handleDelete = async (row: any, rowKey: string) => {
+    if (!confirm("Are you sure? This will affect the supplier's balance!")) return;
+    setIsProcessing(rowKey);
+    try {
+      const targetTable = row.debit > 0 ? 'purchases' : 'vendor_payments';
+      await supabase.from(targetTable).delete().eq('id', row.id);
+      
+      // ডিলিট করার পর লেজার রিফ্রেশ
+      await fetchLedger();
+    } catch (err: any) {
+      alert("Delete failed: " + err.message);
+    } finally {
+      setIsProcessing(null);
+    }
   };
 
   if (!isOpen || !vendor) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] flex justify-end">
-      <div className="bg-[#0a0a0a] w-full max-w-xl h-full border-l border-white/10 p-8 flex flex-col animate-in slide-in-from-right duration-300">
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[110] flex justify-end text-white font-sans overflow-hidden">
+      <div className="bg-[#0a0a0a] w-full max-w-2xl h-full border-l border-white/10 p-6 md:p-8 flex flex-col animate-in slide-in-from-right duration-500">
         
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-black italic uppercase text-orange-500 tracking-tighter">{vendor.name}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-gray-500 transition-colors"><X size={20} /></button>
-        </div>
-
-        {/* Date Filter */}
-        <div className="bg-white/[0.03] border border-white/5 p-4 rounded-2xl mb-8">
-          <p className="text-[9px] font-black uppercase text-gray-500 mb-3 flex items-center gap-2 tracking-widest">
-            <Filter size={12} className="text-orange-500" /> Date Range Filter
-          </p>
-          <div className="flex items-center gap-3">
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-              className="flex-1 bg-black border border-white/10 rounded-xl py-2 px-3 text-[11px] font-bold text-white outline-none focus:border-orange-500 transition-all" />
-            <span className="text-gray-600 text-[10px] font-black uppercase">To</span>
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-              className="flex-1 bg-black border border-white/10 rounded-xl py-2 px-3 text-[11px] font-bold text-white outline-none focus:border-orange-500 transition-all" />
+        <div className="flex justify-between items-start mb-8">
+          <div className="flex flex-col">
+             <h2 className="text-2xl md:text-4xl font-black italic uppercase text-orange-500 tracking-tighter leading-none">{vendor.name}</h2>
+             <span className="text-[10px] text-gray-500 font-bold uppercase mt-2 tracking-[0.3em] opacity-50">Transaction History</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {ledger.length > 0 && (
+              <button onClick={generatePDF} className="flex items-center gap-2 bg-white/5 hover:bg-orange-600 border border-white/10 p-3 rounded-2xl transition-all group">
+                <Download size={18} />
+                <span className="text-[9px] font-black uppercase tracking-widest hidden sm:block">Statement</span>
+              </button>
+            )}
+            <button onClick={onClose} className="p-3 hover:bg-white/10 rounded-full text-gray-400 transition-all">
+              <X size={24} />
+            </button>
           </div>
         </div>
 
-        {/* History Log Title & Download */}
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-[10px] font-black uppercase text-gray-500 tracking-widest flex items-center gap-2">
-            <Calendar size={14} /> History Log ({ledger.length})
-          </h3>
-          <button onClick={generatePDF}
-            className="flex items-center gap-2 bg-orange-600 text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-orange-500 transition-all shadow-lg shadow-orange-600/10 active:scale-95 font-bold">
-            <Download size={14} /> Download PDF
-          </button>
+        {/* Filters */}
+        <div className="grid grid-cols-2 gap-4 mb-8 bg-white/[0.02] border border-white/5 p-5 rounded-[2.5rem]">
+            <div className="space-y-2">
+               <label className="text-[9px] font-black text-gray-500 uppercase ml-2 italic">From</label>
+               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                 className="w-full bg-black border border-white/10 rounded-2xl py-3 px-4 text-[11px] font-bold text-white outline-none focus:border-orange-500/50 [color-scheme:dark]" />
+            </div>
+            <div className="space-y-2">
+               <label className="text-[9px] font-black text-gray-500 uppercase ml-2 italic">To</label>
+               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                 className="w-full bg-black border border-white/10 rounded-2xl py-3 px-4 text-[11px] font-bold text-white outline-none focus:border-orange-500/50 [color-scheme:dark]" />
+            </div>
         </div>
 
-        {/* Table Area */}
-        <div className="flex-1 border border-white/5 rounded-[2rem] overflow-hidden bg-black/40 shadow-inner">
+        {/* Transactions Table */}
+        <div className="flex-1 bg-black/40 border border-white/5 rounded-[2.5rem] overflow-hidden flex flex-col">
           <div className="overflow-y-auto h-full custom-scrollbar">
-            <table className="w-full text-left text-[11px]">
-              <thead className="bg-white/[0.03] text-gray-600 font-black uppercase sticky top-0 border-b border-white/5 backdrop-blur-md">
-                <tr>
-                  <th className="p-4">Date</th>
-                  <th className="p-4">Description</th>
-                  <th className="p-4 text-right">Debit</th>
-                  <th className="p-4 text-right">Credit</th>
+            <table className="w-full text-left text-[11px] border-separate border-spacing-y-2 px-4">
+              <thead className="bg-[#0a0a0a] sticky top-0 z-20">
+                <tr className="text-gray-600 font-black uppercase text-[8px] tracking-[0.2em]">
+                  <th className="p-4">Details</th>
+                  <th className="p-4 text-right">Debit (-)</th>
+                  <th className="p-4 text-right">Credit (+)</th>
+                  <th className="p-4 text-center">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {loading ? (
-                  <tr><td colSpan={4} className="p-20 text-center animate-pulse uppercase font-black text-gray-600">Syncing Records...</td></tr>
+                  <tr><td colSpan={4} className="p-20 text-center animate-pulse font-black text-gray-800 tracking-widest">LOADING LEDGER...</td></tr>
                 ) : ledger.length === 0 ? (
-                  <tr><td colSpan={4} className="p-20 text-center font-bold italic text-gray-700 uppercase">No Transactions Found</td></tr>
-                ) : (
-                  ledger.map((row, i) => (
-                    <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
-                      <td className="p-4 text-gray-500 font-mono">{row.date}</td>
-                      <td className="p-4 font-bold text-white/80 italic group-hover:text-orange-500 transition-colors uppercase">{row.description}</td>
-                      <td className="p-4 text-right font-black text-red-500">{row.debit > 0 ? `৳${row.debit}` : '-'}</td>
-                      <td className="p-4 text-right font-black text-green-500">{row.credit > 0 ? `৳${row.credit}` : '-'}</td>
+                  <tr><td colSpan={4} className="p-20 text-center text-gray-700 italic">No transactions found</td></tr>
+                ) : ledger.map((row, index) => {
+                  const rowKey = `${row.id}-${row.debit > 0 ? 'pur' : 'pay'}`;
+                  return (
+                    <tr key={rowKey} className="bg-white/[0.02] hover:bg-white/[0.04] transition-all group rounded-2xl border border-white/5">
+                      <td className="p-4 rounded-l-2xl">
+                        <div className="text-[9px] text-gray-600 font-mono mb-1">{row.date}</div>
+                        <div className="font-bold text-white/80 uppercase tracking-tighter line-clamp-1">{row.description}</div>
+                      </td>
+                      <td className="p-4 text-right font-black text-red-500">
+                        {editingKey === rowKey && row.debit > 0 ? (
+                          <input type="number" value={editValue} onChange={(e) => setEditValue(Number(e.target.value))}
+                            className="w-20 bg-red-500/10 border border-red-500/50 rounded-lg p-1 text-right text-white" autoFocus />
+                        ) : (
+                          row.debit > 0 ? `৳${row.debit.toLocaleString()}` : '-'
+                        )}
+                      </td>
+                      <td className="p-4 text-right font-black text-emerald-500">
+                        {editingKey === rowKey && row.credit > 0 ? (
+                          <input type="number" value={editValue} onChange={(e) => setEditValue(Number(e.target.value))}
+                            className="w-20 bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-1 text-right text-white" autoFocus />
+                        ) : (
+                          row.credit > 0 ? `৳${row.credit.toLocaleString()}` : '-'
+                        )}
+                      </td>
+                      <td className="p-4 text-center rounded-r-2xl">
+                        <div className="flex items-center justify-center gap-2">
+                          {isProcessing === rowKey ? (
+                            <Loader2 className="animate-spin text-orange-500" size={14} />
+                          ) : editingKey === rowKey ? (
+                            <button onClick={() => handleUpdate(row, rowKey)} className="p-1.5 bg-emerald-500 text-black rounded-lg"><Check size={14} /></button>
+                          ) : (
+                            <>
+                              <button onClick={() => { setEditingKey(rowKey); setEditValue(row.debit > 0 ? row.debit : row.credit); }} className="p-1.5 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Edit2 size={14} /></button>
+                              <button onClick={() => handleDelete(row, rowKey)} className="p-1.5 hover:bg-red-500/20 text-red-500 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
-                  ))
-                )}
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+      
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #f76c21; }
+      `}</style>
     </div>
   );
 }

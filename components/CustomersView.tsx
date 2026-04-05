@@ -12,7 +12,6 @@ export default function CustomersView() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // এডিট মোডের জন্য স্টেট
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', address: '', phone: '' });
 
@@ -35,20 +34,15 @@ export default function CustomersView() {
     setIsSubmitting(false);
   };
 
-  // এডিট মোড চালু করা
   const startEditing = (customer: any) => {
     setEditingId(customer.id);
     setEditForm({ name: customer.name, address: customer.address, phone: customer.phone });
   };
 
-  // আপডেট সেভ করা
   const handleUpdate = async (id: string) => {
     const { error } = await supabase.from('customers').update(editForm).eq('id', id);
     if (error) alert(error.message);
-    else {
-      setEditingId(null);
-      fetchCustomers();
-    }
+    else { setEditingId(null); fetchCustomers(); }
   };
 
   const handleDelete = async (id: string) => {
@@ -64,109 +58,98 @@ export default function CustomersView() {
   );
 
   return (
-    <div className="w-full h-screen flex flex-col space-y-6 bg-[#050505] text-white p-6 overflow-hidden">
+    <div className="w-full min-h-screen bg-[#050505] text-white p-4 md:p-8 space-y-6">
       
-      {/* Header & Search */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
-        <h2 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-3">
-          <Users className="text-green-500" /> CUSTOMER DATABASE <span className="text-sm bg-green-500/10 text-green-500 px-3 py-1 rounded-full not-italic tracking-normal">[{filteredCustomers.length}]</span>
+      {/* Header & Search - Stacked on Mobile */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter flex items-center gap-3">
+          <Users className="text-green-500" size={24} /> 
+          CUSTOMER DATABASE 
+          <span className="text-[10px] bg-green-500/10 text-green-500 px-3 py-1 rounded-full not-italic tracking-normal">
+            {filteredCustomers.length}
+          </span>
         </h2>
         
-        <div className="relative group w-full md:w-64">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-green-500 transition-colors" />
+        <div className="relative group w-full md:w-80">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-green-500" />
           <input 
             type="text" 
-            placeholder="Search..." 
+            placeholder="Search by name or phone..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#0a0a0a] border border-gray-900 rounded-2xl py-3 pl-12 pr-4 text-[11px] font-bold text-white outline-none focus:border-green-900/50 transition-all placeholder:text-gray-700"
+            className="w-full bg-[#0a0a0a] border border-gray-900 rounded-2xl py-4 pl-12 pr-4 text-xs font-bold outline-none focus:border-green-600/30 transition-all"
           />
         </div>
       </div>
 
-      {/* Input Form Card */}
-      <form onSubmit={handleAddCustomer} className="bg-[#0a0a0a] border border-gray-900 p-6 rounded-[2.5rem] shadow-2xl shrink-0 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+      {/* Input Form - Mobile Optimized Grid */}
+      <form onSubmit={handleAddCustomer} className="bg-[#0a0a0a] border border-gray-900 p-5 md:p-8 rounded-[2rem] shadow-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 items-end">
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Full Name</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-black border border-gray-900 rounded-xl p-3 text-[12px] text-white outline-none focus:border-green-600/50 transition-colors" placeholder="e.g. Al Noman" />
+          <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Full Name</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-black border border-gray-900 rounded-xl p-4 text-xs text-white outline-none focus:border-green-600/50" placeholder="Customer Name" />
         </div>
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Address</label>
-          <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full bg-black border border-gray-900 rounded-xl p-3 text-[12px] text-white outline-none focus:border-green-600/50 transition-colors" placeholder="e.g. Dhanmondi" />
+          <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Address</label>
+          <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full bg-black border border-gray-900 rounded-xl p-4 text-xs text-white outline-none focus:border-green-600/50" placeholder="Location" />
         </div>
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Phone Number</label>
-          <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-black border border-gray-900 rounded-xl p-3 text-[12px] text-white outline-none focus:border-green-600/50 transition-colors" placeholder="01XXX-XXXXXX" />
+          <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Phone Number</label>
+          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-black border border-gray-900 rounded-xl p-4 text-xs text-white outline-none focus:border-green-600/50" placeholder="017..." />
         </div>
-        <button type="submit" disabled={isSubmitting} className="bg-green-600 hover:bg-green-500 text-black font-black py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-green-900/10">
-          {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
-          <span className="text-[11px] uppercase tracking-tighter">Register Customer</span>
+        <button type="submit" disabled={isSubmitting} className="bg-green-600 hover:bg-green-500 text-black font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg w-full">
+          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <UserPlus size={20} />}
+          <span className="text-[10px] uppercase tracking-widest">Register</span>
         </button>
       </form>
 
-      {/* Customer List Container */}
-      <div className="flex-1 bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col min-h-0">
-        <div className="overflow-y-auto no-scrollbar flex-1">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 bg-[#0d0d0d] z-10 border-b border-gray-900">
+      {/* Customer List - Table on Desktop, Cards on Mobile */}
+      <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2rem] overflow-hidden">
+        {/* Desktop View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-[#0d0d0d] border-b border-gray-900">
               <tr>
-                <th className="px-8 py-5 text-[10px] font-black text-gray-600 uppercase italic tracking-widest">Customer Information</th>
-                <th className="px-8 py-5 text-[10px] font-black text-gray-600 uppercase italic tracking-widest">Contact Details</th>
-                <th className="px-8 py-5 text-right text-[10px] font-black text-gray-600 uppercase italic tracking-widest">Actions</th>
+                <th className="px-8 py-6 text-[10px] font-black text-gray-600 uppercase italic">Customer Info</th>
+                <th className="px-8 py-6 text-[10px] font-black text-gray-600 uppercase italic">Contact</th>
+                <th className="px-8 py-6 text-right text-[10px] font-black text-gray-600 uppercase italic">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-900/50">
               {isLoading ? (
-                <tr><td colSpan={3} className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-gray-800" size={40} /></td></tr>
+                <tr><td colSpan={3} className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-gray-800" size={32} /></td></tr>
               ) : filteredCustomers.map((c) => (
-                <tr key={c.id} className="hover:bg-white/[0.02] transition-all group">
-                  <td className="px-8 py-4">
+                <tr key={c.id} className="hover:bg-white/[0.02] group transition-colors">
+                  <td className="px-8 py-5">
                     {editingId === c.id ? (
                       <div className="flex flex-col gap-2">
-                        <input 
-                          className="bg-black border border-gray-800 p-1 rounded text-sm text-white" 
-                          value={editForm.name} 
-                          onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                        />
-                        <input 
-                          className="bg-black border border-gray-800 p-1 rounded text-[10px] text-gray-400" 
-                          value={editForm.address} 
-                          onChange={(e) => setEditForm({...editForm, address: e.target.value})}
-                        />
+                        <input className="bg-black border border-gray-800 p-2 rounded text-xs" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
+                        <input className="bg-black border border-gray-800 p-2 rounded text-[10px] text-gray-400" value={editForm.address} onChange={(e) => setEditForm({...editForm, address: e.target.value})} />
                       </div>
                     ) : (
                       <>
-                        <div className="font-bold text-gray-200 uppercase italic group-hover:text-white transition-colors">{c.name}</div>
-                        <div className="flex items-center gap-1 text-[9px] text-gray-600 font-bold mt-1 uppercase">
-                          <MapPin size={10} /> {c.address}
-                        </div>
+                        <div className="font-bold text-gray-200 uppercase italic">{c.name}</div>
+                        <div className="flex items-center gap-1 text-[9px] text-gray-600 font-black mt-1 uppercase"><MapPin size={10}/> {c.address}</div>
                       </>
                     )}
                   </td>
-                  <td className="px-8 py-4">
+                  <td className="px-8 py-5">
                     {editingId === c.id ? (
-                      <input 
-                        className="bg-black border border-gray-800 p-1 rounded text-green-500 font-black italic" 
-                        value={editForm.phone} 
-                        onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                      />
+                      <input className="bg-black border border-gray-800 p-2 rounded text-green-500 font-black italic text-sm" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} />
                     ) : (
-                      <div className="flex items-center gap-2 text-green-500 font-black italic text-lg tracking-tighter">
-                        <Phone size={14} className="text-gray-700" /> {c.phone}
-                      </div>
+                      <div className="flex items-center gap-2 text-green-500 font-black italic text-lg tracking-tighter"><Phone size={14} className="text-gray-800" /> {c.phone}</div>
                     )}
                   </td>
-                  <td className="px-8 py-4 text-right">
-                    <div className="flex justify-end gap-2">
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-3">
                       {editingId === c.id ? (
                         <>
-                          <button onClick={() => handleUpdate(c.id)} className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500/20"><Check size={16}/></button>
-                          <button onClick={() => setEditingId(null)} className="p-2 bg-gray-500/10 text-gray-500 rounded-lg hover:bg-gray-500/20"><X size={16}/></button>
+                          <button onClick={() => handleUpdate(c.id)} className="p-2 bg-green-500/10 text-green-500 rounded-lg"><Check size={18}/></button>
+                          <button onClick={() => setEditingId(null)} className="p-2 bg-gray-500/10 text-gray-500 rounded-lg"><X size={18}/></button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => startEditing(c)} className="p-2 bg-blue-500/5 text-gray-700 hover:text-blue-500 rounded-lg transition-all"><Edit2 size={16}/></button>
-                          <button onClick={() => handleDelete(c.id)} className="p-2 bg-red-500/5 text-gray-700 hover:text-red-500 rounded-lg transition-all"><Trash2 size={16}/></button>
+                          <button onClick={() => startEditing(c)} className="p-2 text-gray-700 hover:text-blue-500 transition-colors"><Edit2 size={18}/></button>
+                          <button onClick={() => handleDelete(c.id)} className="p-2 text-gray-700 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
                         </>
                       )}
                     </div>
@@ -176,12 +159,51 @@ export default function CustomersView() {
             </tbody>
           </table>
         </div>
-      </div>
 
-      <style jsx global>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
+        {/* Mobile View (Cards) */}
+        <div className="md:hidden divide-y divide-gray-900/50">
+          {isLoading ? (
+            <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-gray-800" /></div>
+          ) : filteredCustomers.map((c) => (
+            <div key={c.id} className="p-5 space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  {editingId === c.id ? (
+                    <input className="bg-black border border-gray-800 p-2 rounded text-xs w-full mb-2" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
+                  ) : (
+                    <div className="font-black text-gray-200 uppercase italic tracking-tight">{c.name}</div>
+                  )}
+                  <div className="flex items-center gap-1 text-[10px] text-gray-600 font-black mt-1">
+                    <MapPin size={10} /> 
+                    {editingId === c.id ? (
+                      <input className="bg-black border border-gray-800 p-1 rounded text-[10px]" value={editForm.address} onChange={(e) => setEditForm({...editForm, address: e.target.value})} />
+                    ) : c.address}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {editingId === c.id ? (
+                    <button onClick={() => handleUpdate(c.id)} className="p-2 bg-green-500 text-black rounded-lg"><Check size={16}/></button>
+                  ) : (
+                    <button onClick={() => startEditing(c)} className="p-2 bg-white/5 text-gray-400 rounded-lg"><Edit2 size={16}/></button>
+                  )}
+                  <button onClick={() => editingId === c.id ? setEditingId(null) : handleDelete(c.id)} className="p-2 bg-white/5 text-red-500 rounded-lg">
+                    {editingId === c.id ? <X size={16}/> : <Trash2 size={16}/>}
+                  </button>
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2 text-green-500 font-black italic text-base tracking-tighter">
+                  <Phone size={12} className="text-gray-700" /> 
+                  {editingId === c.id ? (
+                    <input className="bg-black border border-gray-800 p-1 rounded text-xs w-28" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} />
+                  ) : c.phone}
+                </div>
+                <a href={`tel:${c.phone}`} className="text-[9px] bg-green-500 text-black px-3 py-1 rounded-full font-black uppercase tracking-widest">Call Now</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

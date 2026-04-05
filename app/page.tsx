@@ -9,7 +9,9 @@ import ProductsView from '@/components/ProductsView';
 import SourcingPage from './sourcing/page'; 
 import ExpenseManager from '@/components/ExpenseManager';
 import CustomerReport from './reports/page'; 
-import VendorDashboard from './vendors/page'; // ১. ভেন্ডর পেজটি ইমপোর্ট করুন
+import VendorDashboard from './vendors/page';
+import InventoryReport from '@/components/InventoryReport'; // ইনভেন্টরি রিপোর্ট ইমপোর্ট
+import PurchaseEntry from '@/components/PurchaseEntry'; // পারচেজ এন্ট্রি ইমপোর্ট
 
 export default function Home() {
   const [activeView, setActiveView] = useState('dashboard');
@@ -23,11 +25,17 @@ export default function Home() {
       case 'orders': 
         return <OrdersView setView={setActiveView} setSelectedEditOrder={setSelectedEditOrder} />;
       
-      case 'vendors': // ২. নতুন ভেন্ডর কেস যুক্ত করা হলো
+      case 'vendors': 
         return <VendorDashboard />;
       
       case 'sourcing': 
         return <SourcingPage />; 
+
+      case 'purchase': // সাইডবারে "Stock In (Buy)" এ ক্লিক করলে এটি ওপেন হবে
+        return <PurchaseEntry />; 
+
+      case 'inventory-report': // সাইডবারে "Stock Movement" এ ক্লিক করলে এটি ওপেন হবে
+        return <InventoryReport />; 
       
       case 'expenses': 
         return <ExpenseManager />; 
