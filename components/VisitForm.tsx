@@ -7,7 +7,12 @@ import {
   Bell, Users, Target, CheckCircle, Trash2, Edit3, UserCheck, X, Download
 } from 'lucide-react';
 
-export default function VisitForm() {
+// এই অংশটুকু যোগ করুন
+interface VisitFormProps {
+  onSuccess?: () => void;
+}
+
+export default function VisitForm({ onSuccess }: VisitFormProps) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -23,7 +28,6 @@ export default function VisitForm() {
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]); 
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
 
-  // রিফ্রেশ বা ড্রপডাউন কন্ট্রোলের জন্য রেফারেন্স
   const notificationRef = useRef<HTMLDivElement>(null);
   
   const [formData, setFormData] = useState({
@@ -71,7 +75,11 @@ export default function VisitForm() {
 
   useEffect(() => { fetchData(); }, [filterDate]);
 
-  // আপডেট: সবার ডেটা একসাথে ডাউনলোড করার ফাংশন
+  // ফিক্স: filteredPartners কে আগে ডিফাইন করা হয়েছে যাতে নিচের ফাংশন এটি খুঁজে পায়
+  const filteredPartners = visitHistory.filter(v => 
+    v.temp_customer_name && v.temp_customer_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const downloadAllFilteredData = () => {
     if (filteredPartners.length === 0) return alert("No data to download!");
     
@@ -187,10 +195,6 @@ export default function VisitForm() {
     }
   };
 
-  const filteredPartners = visitHistory.filter(v => 
-    v.temp_customer_name && v.temp_customer_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
     <div className="min-h-screen lg:fixed lg:inset-0 lg:ml-64 bg-[#050505] text-white flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden font-sans">
       
@@ -209,9 +213,7 @@ export default function VisitForm() {
             </div>
 
             <div className="flex items-center gap-2 lg:gap-4 w-full md:w-auto justify-between">
-               {/* বেল আইকন সেকশন - ফাংশনাল করা হয়েছে */}
                <div className="relative" ref={notificationRef}>
-  {/* বেল বাটন */}
   <button 
     onClick={() => setShowNotification(!showNotification)}
     className={`relative p-2.5 lg:p-3 rounded-xl bg-[#1a1a1a] border transition-all duration-300 ${
@@ -227,7 +229,6 @@ export default function VisitForm() {
     )}
   </button>
   
-  {/* ড্রপডাউন মেনু - ফিক্সড পজিশন ও হাই জেড-ইনডেক্স */}
   {showNotification && (
     <div className="
       fixed inset-x-4 top-[70px] mx-auto w-auto max-w-[calc(100%-32px)] 
@@ -235,7 +236,6 @@ export default function VisitForm() {
       bg-[#121212] border border-orange-500/30 rounded-2xl p-0 
       z-[9999] shadow-[0_25px_60px_rgba(0,0,0,0.9)] backdrop-blur-2xl
     ">
-       {/* হেডার অংশ */}
        <div className="flex justify-between items-center p-4 border-b border-white/5">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-orange-500 animate-ping"></div>
@@ -246,7 +246,6 @@ export default function VisitForm() {
           </span>
        </div>
 
-       {/* কন্টেন্ট লিস্ট */}
        <div className="p-2 space-y-2 max-h-[60vh] lg:max-h-[400px] overflow-y-auto custom-scrollbar">
          {stats.todayReminders.length > 0 ? (
            stats.todayReminders.map(rem => (
@@ -279,15 +278,14 @@ export default function VisitForm() {
              <div className="h-12 w-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-700">
                <Bell size={24} />
              </div>
-             <p className="text-[11px] text-gray-500">সব ক্লিয়ার! আজকের কোনো ফলো-আপ নেই।</p>
+             <p className="text-[11px] text-gray-500">সব ক্লিয়ার! আজকের কোনো ফলো-আপ নেই।</p>
            </div>
          )}
        </div>
 
-       {/* ফুটার (ঐচ্ছিক) */}
        <div className="p-3 bg-white/[0.02] rounded-b-2xl border-t border-white/5 text-center">
           <button className="text-[9px] text-orange-500/70 hover:text-orange-500 font-bold uppercase tracking-widest transition-colors">
-             View All Activities
+              View All Activities
           </button>
        </div>
     </div>
@@ -446,7 +444,6 @@ export default function VisitForm() {
               <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-2">Manage & Bulk Download Entries</p>
             </div>
             
-            {/* সাজানো সার্চ আইকন সেকশন */}
             <div className="relative mb-6 lg:mb-8">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 p-1.5 bg-orange-600/10 rounded-lg">
                 <Search className="text-orange-600" size={18}/>
@@ -454,13 +451,12 @@ export default function VisitForm() {
               <input 
                 autoFocus 
                 type="text" 
-                placeholder="     Search by partner name..." 
+                placeholder="    Search by partner name..." 
                 value={searchTerm} 
                 onChange={(e) => setSearchTerm(e.target.value)} 
                 className="w-full bg-black border border-white/10 p-5 lg:p-6 pl-16 rounded-2xl text-md lg:text-lg outline-none focus:border-orange-600 focus:ring-1 focus:ring-orange-600/20 transition-all placeholder:text-gray-700" 
               />
               
-              {/* ডাউনলোড অল বাটন - সার্চের পাশে রাখা হয়েছে */}
               {filteredPartners.length > 0 && (
                 <button 
                   onClick={downloadAllFilteredData}
