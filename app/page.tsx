@@ -12,6 +12,7 @@ import CustomerReport from './reports/page';
 import VendorDashboard from './vendors/page';
 import InventoryReport from '@/components/InventoryReport'; // ইনভেন্টরি রিপোর্ট ইমপোর্ট
 import PurchaseEntry from '@/components/PurchaseEntry'; // পারচেজ এন্ট্রি ইমপোর্ট
+import VisitForm from '@/components/VisitForm';
 
 export default function Home() {
   const [activeView, setActiveView] = useState('dashboard');
@@ -51,6 +52,14 @@ export default function Home() {
 
       case 'reports': 
         return <CustomerReport />; 
+      
+      // নতুন ভিউ যুক্ত করা হলো
+      case 'visit-log': 
+        return (
+          <div className="p-8 max-w-2xl mx-auto">
+             <VisitForm onSuccess={() => setActiveView('dashboard')} />
+          </div>
+        ); 
       
       default: 
         return <DashboardHome />;

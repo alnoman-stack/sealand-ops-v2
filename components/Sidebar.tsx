@@ -15,8 +15,9 @@ import {
   Zap,
   BarChart3,
   LogOut,
-  Menu, // নতুন আইকন
-  X     // নতুন আইকন
+  Menu, 
+  X,
+  MapPin // নতুন ভিজিটর আইকন যুক্ত করা হয়েছে
 } from 'lucide-react';
 
 const menuItems = [
@@ -31,12 +32,13 @@ const menuItems = [
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'products', label: 'Inventory', icon: Package },
   { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'visit-log', label: 'Daily Visit Log', icon: MapPin }, // নতুন মেনু আইটেম যুক্ত হলো
 ];
 
 export default function Sidebar({ activeView, setView }: any) {
   const router = useRouter();
   const [userName, setUserName] = useState('Loading...'); 
-  const [isOpen, setIsOpen] = useState(false); // মোবাইল মেনু কন্ট্রোল করার জন্য
+  const [isOpen, setIsOpen] = useState(false); 
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -60,12 +62,12 @@ export default function Sidebar({ activeView, setView }: any) {
 
   const handleMenuClick = (id: string) => {
     setView(id);
-    setIsOpen(false); // মেনু আইটেমে ক্লিক করলে মোবাইলে সাইডবার বন্ধ হয়ে যাবে
+    setIsOpen(false); 
   };
 
   return (
     <>
-      {/* মোবাইল বাটন - শুধুমাত্র ছোট স্ক্রিনে দেখাবে */}
+      {/* মোবাইল বাটন */}
       <div className="lg:hidden fixed top-4 left-4 z-[60]">
         <button 
           onClick={() => setIsOpen(!isOpen)}
@@ -75,7 +77,7 @@ export default function Sidebar({ activeView, setView }: any) {
         </button>
       </div>
 
-      {/* মোবাইল ওভারলে - সাইডবার খোলা থাকলে ব্যাকগ্রাউন্ড ঝাপসা করবে */}
+      {/* মোবাইল ওভারলে */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[40] lg:hidden"
@@ -105,7 +107,7 @@ export default function Sidebar({ activeView, setView }: any) {
               onClick={() => handleMenuClick(item.id)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 ${
                 activeView === item.id 
-                ? (item.id === 'vendors' || item.id === 'purchase' || item.id === 'sourcing' || item.id === 'inventory-report'
+                ? (item.id === 'vendors' || item.id === 'purchase' || item.id === 'sourcing' || item.id === 'inventory-report' || item.id === 'visit-log'
                     ? 'bg-orange-600 text-black shadow-lg shadow-orange-600/20' 
                     : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20')
                 : 'text-gray-500 hover:bg-white/5 hover:text-gray-200'
