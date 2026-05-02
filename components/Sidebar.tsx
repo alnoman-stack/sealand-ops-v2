@@ -17,7 +17,7 @@ import {
   LogOut,
   Menu, 
   X,
-  MapPin // নতুন ভিজিটর আইকন যুক্ত করা হয়েছে
+  MapPin 
 } from 'lucide-react';
 
 const menuItems = [
@@ -32,7 +32,7 @@ const menuItems = [
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'products', label: 'Inventory', icon: Package },
   { id: 'reports', label: 'Reports', icon: FileText },
-  { id: 'visit-log', label: 'Daily Visit Log', icon: MapPin }, // নতুন মেনু আইটেম যুক্ত হলো
+  { id: 'visit-log', label: 'Daily Visit Log', icon: MapPin },
 ];
 
 export default function Sidebar({ activeView, setView }: any) {
@@ -87,12 +87,13 @@ export default function Sidebar({ activeView, setView }: any) {
 
       {/* মেইন সাইডবার কন্টেইনার */}
       <div className={`
-        fixed lg:relative z-[50] h-screen bg-[#050505] border-r border-gray-900 p-6 flex flex-col shrink-0
-        transition-all duration-300 ease-in-out
+        fixed lg:relative z-[50] h-screen bg-[#050505] border-r border-gray-900 flex flex-col shrink-0
+        transition-all duration-300 ease-in-out overflow-y-auto custom-scrollbar
         ${isOpen ? 'left-0 w-72' : '-left-full lg:left-0 w-72'}
       `}>
+        
         {/* Logo Section */}
-        <div className="mb-10 px-4 mt-12 lg:mt-0">
+        <div className="p-6 pt-16 lg:pt-8 flex-shrink-0">
           <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">
             SEALAND <span className="text-orange-600">OPS</span>
           </h1>
@@ -100,48 +101,49 @@ export default function Sidebar({ activeView, setView }: any) {
         </div>
         
         {/* Navigation Menu */}
-        <nav className="flex-1 space-y-2 overflow-y-auto pr-2 no-scrollbar">
+        <nav className="flex-1 px-4 space-y-1.5 mb-6">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => handleMenuClick(item.id)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 ${
+              className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 ${
                 activeView === item.id 
-                ? (item.id === 'vendors' || item.id === 'purchase' || item.id === 'sourcing' || item.id === 'inventory-report' || item.id === 'visit-log'
+                ? (['vendors', 'purchase', 'sourcing', 'inventory-report', 'visit-log'].includes(item.id)
                     ? 'bg-orange-600 text-black shadow-lg shadow-orange-600/20' 
                     : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20')
                 : 'text-gray-500 hover:bg-white/5 hover:text-gray-200'
               }`}
             >
-              <item.icon size={18} className={`${activeView === item.id ? 'scale-110' : ''} transition-transform`} />
-              {item.label}
+              <item.icon size={16} className={`${activeView === item.id ? 'scale-110' : ''} transition-transform`} />
+              <span className="truncate">{item.label}</span>
             </button>
           ))}
         </nav>
 
         {/* Footer & Logout Section */}
-        <div className="mt-auto pt-6 space-y-4">
-          <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5">
-            <p className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Logged in as</p>
-            <p className="text-[10px] font-bold text-gray-400 truncate capitalize">
+        <div className="p-4 mt-auto space-y-3 bg-[#050505] sticky bottom-0 border-t border-white/5">
+          <div className="p-3 bg-white/[0.02] rounded-xl border border-white/5">
+            <p className="text-[7px] font-black text-gray-600 uppercase tracking-widest">Logged in as</p>
+            <p className="text-[9px] font-bold text-gray-400 truncate capitalize">
               {userName}
             </p>
           </div>
 
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest text-red-500 bg-red-500/5 border border-red-500/10 hover:bg-red-500 hover:text-white transition-all duration-300 group"
+            className="w-full flex items-center justify-center gap-3 px-5 py-3.5 rounded-xl font-black uppercase text-[10px] tracking-widest text-red-500 bg-red-500/5 border border-red-500/10 hover:bg-red-500 hover:text-white transition-all duration-300 group"
           >
             <LogOut size={16} className="group-hover:translate-x-1 transition-transform" />
             Logout System
           </button>
         </div>
-
-        <style jsx global>{`
-          .no-scrollbar::-webkit-scrollbar { display: none; }
-          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        `}</style>
       </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
+        .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: thin; }
+      `}</style>
     </>
   );
 }
