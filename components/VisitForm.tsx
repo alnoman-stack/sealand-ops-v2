@@ -43,7 +43,9 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
   });
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const allPermanentLeads = visitHistory.filter(v => v.temp_customer_name);
+  
+  // সব পার্মানেন্ট লিড বা কাস্টমার যারা এন্ট্রি হয়েছে (ভেরিফাই হওয়া বা না হওয়া সব)
+  const allPermanentLeads = visitHistory.filter(v => v.temp_customer_name || v.mobile_number);
 
   const stats = {
     totalVisits: visitHistory.length,
@@ -84,7 +86,8 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
       const isToday = v.visit_date?.startsWith(filterDate);
       return matchesSearch && v.temp_customer_name && isToday;
     } else if (activeTab === 'archive') {
-      return matchesSearch && v.temp_customer_name;
+      // আর্কাইভ ট্যাবে ভেরিফাই হওয়া ও নতুন সব লিড একসাথে চিরতরে শো করবে
+      return matchesSearch && (v.temp_customer_name || v.mobile_number);
     } else if (activeTab === 'existing') {
       return matchesSearch && v.customer_id;
     }
@@ -92,7 +95,8 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
   });
 
   const filteredPartners = visitHistory.filter(v => 
-    v.temp_customer_name && v.temp_customer_name.toLowerCase().includes(searchTerm.toLowerCase())
+    (v.temp_customer_name || v.customers?.name) && 
+    (v.temp_customer_name || v.customers?.name).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const downloadAllFilteredData = () => {
@@ -100,14 +104,14 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
     
     const headers = "Name,Phone,Address,Assigned To,Date\n";
     const rows = filteredPartners.map(p => 
-      `"${p.temp_customer_name}","${p.mobile_number || 'N/A'}","${p.location_name}","${p.assigned_to}","${p.visit_date?.split('T')[0]}"`
+      `"${p.temp_customer_name || p.customers?.name || 'N/A'}","${p.mobile_number || p.customers?.phone || 'N/A'}","${p.location_name || 'N/A'}","${p.assigned_to || 'N/A'}","${p.visit_date?.split('T')[0] || 'N/A'}"`
     ).join("\n");
 
     const csvContent = "data:text/csv;charset=utf-8," + headers + rows;
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `SeaLand_Permanent_Customer_Database_${todayStr}.csv`);
+    link.setAttribute("download", `SeaLand_Master_Customer_Database_${todayStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -135,34 +139,44 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
        setIsQuickAdd(false);
     }
     setFormData({
-      visit_type: log.visit_type,
-      status: log.status,
-      notes: log.notes,
-      location_name: log.location_name,
+      visit_type: log.visit_type || 'Routine Check',
+      status: log.status || 'Follow-up Needed',
+      notes: log.notes || '',
+      location_name: log.location_name || '',
       next_follow_up: log.next_follow_up || '',
-      assigned_to: log.assigned_to,
+      assigned_to: log.assigned_to || 'Noman',
       customer_issue: log.customer_issue || '',
       resolution_status: log.resolution_status || 'Pending'
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // ভেরিফাই করলে কাস্টমার টেবিলে এন্ট্রি হবে, কিন্তু লগ থেকে রিমুভ না হয়ে স্ট্যাটাস 'Verified' হয়ে আর্কাইভে থেকে যাবে
   const promoteToCustomer = async (log: any) => {
     try {
+      const customerName = log.temp_customer_name || log.customers?.name;
+      const customerPhone = log.mobile_number || log.customers?.phone || 'N/A';
+      const customerAddress = log.location_name || 'N/A';
+
       const { data, error } = await supabase
         .from('customers')
         .insert([{ 
-          name: log.temp_customer_name, 
-          phone: log.mobile_number || 'N/A',
-          address: log.location_name 
+          name: customerName, 
+          phone: customerPhone,
+          address: customerAddress 
         }])
         .select().single();
       
       if (error) throw error;
-      await supabase.from('visit_logs').update({ customer_id: data.id, temp_customer_name: null }).eq('id', log.id);
-      alert("Partner added to official customer list!");
+      
+      await supabase.from('visit_logs').update({ 
+        customer_id: data.id, 
+        status: 'Verified' 
+      }).eq('id', log.id);
+
+      alert("Partner successfully verified and added to official client list!");
       fetchData();
-    } catch (err) { alert("Error adding customer"); }
+    } catch (err: any) { alert("Error adding customer: " + err.message); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -194,7 +208,6 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
         visitPayload.resolution_status = null;
       } else {
         visitPayload.customer_id = selectedCustomerId;
-        visitPayload.temp_customer_name = null;
       }
 
       const { error } = editingId 
@@ -322,7 +335,7 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
                <h2 className="text-xl lg:text-2xl font-black">{stats.totalVisits}</h2>
             </div>
             <div className="bg-orange-600/5 p-4 lg:p-5 rounded-3xl border border-orange-600/10 hover:bg-orange-600/10 transition-all">
-               <p className="text-[8px] font-black uppercase text-orange-500">Permanent Leads</p>
+               <p className="text-[8px] font-black uppercase text-orange-500">All Leads Archive</p>
                <h2 className="text-xl lg:text-2xl font-black">{stats.newLeads}</h2>
             </div>
             <div className="bg-blue-600/5 p-4 lg:p-5 rounded-3xl border border-blue-600/10">
@@ -374,7 +387,7 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
           </div>
         </div>
 
-        {/* লিস্ট বা টেবিল ফরম্যাট সেকশন */}
+        {/* টেবিল লিস্ট ফরম্যাট */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           {displayedVisits.length > 0 ? (
             <div className="w-full overflow-x-auto border border-white/10 rounded-2xl bg-[#0d0d0d] shadow-2xl">
@@ -393,8 +406,10 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
                   {displayedVisits.map((log) => (
                     <tr key={log.id} className="hover:bg-white/[0.03] transition-colors">
                       <td className="p-4 font-bold uppercase text-white flex items-center gap-2">
-                        {log.customers?.name || log.temp_customer_name}
-                        {log.temp_customer_name && (
+                        {log.customers?.name || log.temp_customer_name || 'N/A'}
+                        {log.customer_id ? (
+                          <span className="text-[7px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/25">VERIFIED CLIENT</span>
+                        ) : (
                           <span className="text-[7px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full border border-green-500/25">LEAD</span>
                         )}
                       </td>
@@ -405,7 +420,7 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
                         {log.location_name || 'N/A'}
                       </td>
                       <td className="p-4 font-bold text-gray-400 uppercase">
-                        {log.assigned_to}
+                        {log.assigned_to || 'Noman'}
                       </td>
                       <td className="p-4">
                         {log.customer_issue ? (
@@ -413,16 +428,19 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
                             Issue: {log.customer_issue} ({log.resolution_status || 'Pending'})
                           </span>
                         ) : (
-                          <span className="text-[10px] bg-orange-600/10 text-orange-500 px-2.5 py-1 rounded-md uppercase font-bold border border-orange-600/20">
-                            {log.status}
+                          <span className={`text-[10px] px-2.5 py-1 rounded-md uppercase font-bold border ${
+                            log.customer_id ? 'bg-blue-600/10 text-blue-400 border-blue-600/20' : 'bg-orange-600/10 text-orange-500 border-orange-600/20'
+                          }`}>
+                            {log.customer_id ? 'Verified' : (log.status || 'Active')}
                           </span>
                         )}
                       </td>
-                      <td className="p-4 text-right space-x-2">
-                        {log.temp_customer_name && (
+                      <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                        {/* ভেরিফাই না করা থাকলে Verify বাটন দেখাবে, ভেরিফাই হয়ে গেলেও ডেটা লিস্টে শো করবে */}
+                        {!log.customer_id && (
                           <button 
                             onClick={() => promoteToCustomer(log)} 
-                            title="Add to Client"
+                            title="Verify and Add to Client"
                             className="px-2.5 py-1 bg-orange-600/20 text-orange-400 rounded-lg font-bold text-[9px] hover:bg-orange-600 hover:text-black transition-all"
                           >
                             <UserCheck size={12} className="inline mr-1"/> Verify
@@ -499,7 +517,7 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
                   <textarea 
                     rows={2} 
                     placeholder="কাস্টমারের সমস্যা এখানে লিখুন..." 
-                    value={formData.customer_issue} 
+                    value={formData.customer_issue || ''} 
                     onChange={(e) => setFormData({...formData, customer_issue: e.target.value})} 
                     className="w-full bg-black border border-white/10 p-3 rounded-xl text-xs resize-none outline-none focus:border-blue-500" 
                   />
@@ -508,7 +526,7 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
                 <div>
                   <label className="text-[9px] font-bold text-blue-400 uppercase ml-1 mb-1 block">Resolution Status</label>
                   <select 
-                    value={formData.resolution_status} 
+                    value={formData.resolution_status || 'Pending'} 
                     onChange={(e) => setFormData({...formData, resolution_status: e.target.value})} 
                     className="w-full bg-black border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-blue-500"
                   >
@@ -531,7 +549,7 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[8px] font-bold text-gray-400 uppercase ml-1 mb-1 block">Assigned Staff</label>
-              <select value={formData.assigned_to} onChange={(e) => setFormData({...formData, assigned_to: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600">
+              <select value={formData.assigned_to || 'Noman'} onChange={(e) => setFormData({...formData, assigned_to: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600">
                   <option value="Noman">Noman</option>
                   <option value="Shafin">Shafin</option>
                   <option value="Rabbi">Rabbi</option>
@@ -539,7 +557,7 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
             </div>
             <div>
               <label className="text-[8px] font-bold text-gray-400 uppercase ml-1 mb-1 block">Visit Type</label>
-              <select value={formData.visit_type} onChange={(e) => setFormData({...formData, visit_type: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600">
+              <select value={formData.visit_type || 'Routine Check'} onChange={(e) => setFormData({...formData, visit_type: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600">
                   <option>Routine Check</option>
                   <option>New Lead</option>
                   <option>Order Collection</option>
@@ -550,17 +568,17 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
 
           <div>
             <label className="text-[8px] font-bold text-gray-400 uppercase ml-1 mb-1 block">Location</label>
-            <input type="text" placeholder="Visit Location" value={formData.location_name} onChange={(e) => setFormData({...formData, location_name: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600" />
+            <input type="text" placeholder="Visit Location" value={formData.location_name || ''} onChange={(e) => setFormData({...formData, location_name: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600" />
           </div>
 
           <div>
             <label className="text-[8px] font-bold text-gray-400 uppercase ml-1 mb-1 block">General Discussion Notes</label>
-            <textarea rows={2} value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} placeholder="What was discussed overall?" className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs resize-none outline-none focus:border-orange-600" />
+            <textarea rows={2} value={formData.notes || ''} onChange={(e) => setFormData({...formData, notes: e.target.value})} placeholder="What was discussed overall?" className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs resize-none outline-none focus:border-orange-600" />
           </div>
 
           <div className="space-y-1">
             <label className="text-[8px] font-bold text-gray-400 uppercase ml-1 block">Next Follow-up Date</label>
-            <input type="date" value={formData.next_follow_up} onChange={(e) => setFormData({...formData, next_follow_up: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600" />
+            <input type="date" value={formData.next_follow_up || ''} onChange={(e) => setFormData({...formData, next_follow_up: e.target.value})} className="w-full bg-[#0d0d0d] border border-white/10 p-3 rounded-xl text-xs outline-none focus:border-orange-600" />
           </div>
 
           <button disabled={loading} className="w-full py-3.5 lg:py-5 bg-orange-600 text-black font-black rounded-xl uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-50 mt-2">
@@ -576,8 +594,8 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
             <button onClick={() => setShowPartnerSearch(false)} className="absolute top-6 right-6 lg:top-8 lg:right-8 text-gray-500 hover:text-white transition-colors"><X size={24}/></button>
             
             <div className="mb-6 lg:mb-8 pr-12">
-              <h2 className="text-2xl lg:text-3xl font-black uppercase italic text-orange-600 leading-tight">Partner Directory</h2>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-2">Manage & Bulk Download New Leads</p>
+              <h2 className="text-2xl lg:text-3xl font-black uppercase italic text-orange-600 leading-tight">Master Directory</h2>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-2">Manage & Bulk Download All Leads</p>
             </div>
             
             <div className="relative mb-6 lg:mb-8">
@@ -609,25 +627,17 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
                 filteredPartners.map(p => (
                   <div key={p.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 lg:p-5 bg-white/[0.02] rounded-2xl border border-white/5 hover:border-white/10 transition-all gap-4">
                     <div>
-                      <h4 className="font-black uppercase text-sm text-gray-200">{p.temp_customer_name}</h4>
+                      <h4 className="font-black uppercase text-sm text-gray-200">{p.temp_customer_name || p.customers?.name}</h4>
                       <div className="flex flex-col gap-1 mt-1.5">
-                        <p className="text-[9px] lg:text-[10px] text-gray-500 flex items-center gap-2 italic"><MapPin size={10} className="text-blue-500/50"/> {p.location_name}</p>
-                        <p className="text-[9px] lg:text-[10px] text-orange-500/70 flex items-center gap-2 font-bold"><Phone size={10}/> {p.mobile_number || 'N/A'}</p>
+                        <p className="text-[9px] lg:text-[10px] text-gray-500 flex items-center gap-2 italic"><MapPin size={10} className="text-blue-500/50"/> {p.location_name || 'N/A'}</p>
+                        <p className="text-[9px] lg:text-[10px] text-orange-500/70 flex items-center gap-2 font-bold"><Phone size={10}/> {p.mobile_number || p.customers?.phone || 'N/A'}</p>
                       </div>
-                    </div>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                      <button 
-                        onClick={() => {promoteToCustomer(p); setShowPartnerSearch(false);}}
-                        className="flex-1 sm:flex-none px-5 py-3 bg-orange-600 text-black rounded-xl font-black text-[10px] uppercase hover:scale-105 active:scale-95 transition-all"
-                      >
-                        Verify Partner
-                      </button>
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="text-center py-20 bg-white/[0.01] rounded-3xl border border-dashed border-white/5">
-                  <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em]">No matching partners found</p>
+                  <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em]">No matching records found</p>
                 </div>
               )}
             </div>
@@ -637,4 +647,3 @@ export default function VisitForm({ onSuccess }: VisitFormProps) {
     </div>
   );
 }
-
