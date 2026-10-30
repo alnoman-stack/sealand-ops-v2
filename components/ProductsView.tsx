@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Package, Search, Loader2, Tag, Plus, Check, X, ArrowUpRight } from 'lucide-react';
+import { Package, Search, Loader2, Tag, Plus, Check, X, ArrowUpRight, Edit2 } from 'lucide-react';
 import FileUpload from './FileUpload'; 
 
 export default function ProductsView() {
@@ -9,7 +9,10 @@ export default function ProductsView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [tempPrice, setTempPrice] = useState<string>('');
+  
+  // সম্পূর্ণ কার্ড এডিট করার জন্য টেম্পোরারি স্টেট
+  const [editForm, setEditForm] = useState({ name_en: '', price: '', category: 'Vegetables', unit: '' });
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProduct, setNewProduct] = useState({ name_en: '', price: '', category: 'Vegetables', unit: 'kg' });
 
@@ -27,15 +30,29 @@ export default function ProductsView() {
 
   useEffect(() => { fetchProducts(); }, []);
 
-  const handleUpdatePrice = async (id: number) => {
+  // ফুল কার্ড আপডেট হ্যান্ডলার
+  const handleUpdateProduct = async (id: number) => {
     const { error } = await supabase
       .from('products')
-      .update({ price: parseInt(tempPrice) })
+      .update({ 
+        name_en: editForm.name_en,
+        price: parseInt(editForm.price) || 0,
+        category: editForm.category,
+        unit: editForm.unit
+      })
       .eq('id', id);
     
     if (!error) {
-      setProducts(products.map(p => p.id === id ? { ...p, price: tempPrice } : p));
+      setProducts(products.map(p => p.id === id ? { 
+        ...p, 
+        name_en: editForm.name_en, 
+        price: editForm.price, 
+        category: editForm.category, 
+        unit: editForm.unit 
+      } : p));
       setEditingId(null);
+    } else {
+      alert("Error updating: " + error.message);
     }
   };
 
@@ -104,60 +121,122 @@ export default function ProductsView() {
             </div>
           ) : (
             <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {filteredProducts.map((p) => (
-                <div key={p.id} className="group relative bg-[#080808] border border-white/5 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 hover:border-green-500/40 transition-all duration-500">
-                  
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 group-hover:border-green-500/20">
-                      <Package className="text-gray-600 group-hover:text-green-500 transition-colors" size={18} />
-                    </div>
-                    <span className="text-[9px] font-mono text-gray-800">ID: {p.id}</span>
-                  </div>
-
-                  <div className="mb-6">
-                    <h3 className="text-lg md:text-xl font-black uppercase italic tracking-tighter text-gray-200 group-hover:text-white transition-colors truncate">
-                      {p.name_en}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <Tag size={10} className="text-green-500" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-gray-600 bg-white/5 px-2 py-0.5 rounded">
-                        {p.category} • {p.unit}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-white/5 flex items-end justify-between">
-                    <div className="flex-1">
-                      <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-1">Rate / {p.unit}</p>
-                      {editingId === p.id ? (
+              {filteredProducts.map((p) => {
+                const isEditing = editingId === p.id;
+                return (
+                  <div key={p.id} className="group relative bg-[#080808] border border-white/5 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 hover:border-green-500/40 transition-all duration-500 flex flex-col justify-between">
+                    
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 group-hover:border-green-500/20">
+                          <Package className="text-gray-600 group-hover:text-green-500 transition-colors" size={18} />
+                        </div>
                         <div className="flex items-center gap-2">
-                          <input 
-                            autoFocus
-                            className="bg-black border border-green-500 rounded-lg w-20 px-2 py-1 text-xl font-black text-white outline-none"
-                            value={tempPrice}
-                            onChange={(e) => setTempPrice(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleUpdatePrice(p.id)}
-                          />
-                          <button onClick={() => handleUpdatePrice(p.id)} className="bg-green-500 p-1 rounded text-black"><Check size={14}/></button>
+                          <span className="text-[9px] font-mono text-gray-800">ID: {p.id}</span>
+                          {!isEditing && (
+                            <button 
+                              onClick={() => { 
+                                setEditingId(p.id); 
+                                setEditForm({ name_en: p.name_en || '', price: p.price || '', category: p.category || 'Vegetables', unit: p.unit || '' }); 
+                              }}
+                              className="p-1.5 bg-white/5 hover:bg-green-500 hover:text-black rounded-lg transition-all text-gray-400"
+                              title="Edit Product"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        <div 
-                          onClick={() => { setEditingId(p.id); setTempPrice(p.price); }}
-                          className="flex items-baseline gap-1 cursor-pointer group/price"
-                        >
-                          <span className="text-2xl md:text-3xl font-black italic tracking-tighter text-white group-hover/price:text-green-500 transition-colors">
-                            {p.price}
-                          </span>
-                          <span className="text-[9px] text-gray-400 font-black uppercase">TK</span>
-                        </div>
+                      </div>
+
+                      {/* প্রোডাক্ট নাম, ক্যাটাগরি (ড্রপডাউন) ও ইউনিট এডিট সেকশন */}
+                      <div className="mb-6 space-y-3">
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <input 
+                              type="text"
+                              className="w-full bg-black border border-green-500 rounded-lg px-2 py-1.5 text-sm font-black text-white outline-none uppercase"
+                              value={editForm.name_en}
+                              onChange={(e) => setEditForm({...editForm, name_en: e.target.value})}
+                              placeholder="Product Name"
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* ক্যাটাগরি ড্রপডাউন */}
+                              <select 
+                                className="w-full bg-black border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none uppercase"
+                                value={editForm.category}
+                                onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                              >
+                                <option value="Vegetables">Vegetables</option>
+                                <option value="Frozen">Frozen</option>
+                                <option value="Fish">Fish</option>
+                                <option value="Meat">Meat</option>
+                                <option value="Sauce">Sauce</option>
+                              </select>
+
+                              <input 
+                                type="text"
+                                className="w-full bg-black border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none uppercase"
+                                value={editForm.unit}
+                                onChange={(e) => setEditForm({...editForm, unit: e.target.value})}
+                                placeholder="Unit"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <h3 className="text-lg md:text-xl font-black uppercase italic tracking-tighter text-gray-200 group-hover:text-white transition-colors truncate">
+                              {p.name_en}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              <Tag size={10} className="text-green-500" />
+                              <span className="text-[8px] font-black uppercase tracking-widest text-gray-600 bg-white/5 px-2 py-0.5 rounded">
+                                {p.category} / {p.unit}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* প্রাইস ও অ্যাকশন সেকশন */}
+                    <div className="pt-4 border-t border-white/5 flex items-end justify-between">
+                      <div className="flex-1">
+                        <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-1">Rate / {isEditing ? editForm.unit : p.unit}</p>
+                        {isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number"
+                              className="bg-black border border-green-500 rounded-lg w-24 px-2 py-1 text-lg font-black text-white outline-none"
+                              value={editForm.price}
+                              onChange={(e) => setEditForm({...editForm, price: e.target.value})}
+                            />
+                            <button onClick={() => handleUpdateProduct(p.id)} className="bg-green-500 p-2 rounded-lg text-black hover:bg-white transition-all"><Check size={14}/></button>
+                            <button onClick={() => setEditingId(null)} className="bg-white/10 p-2 rounded-lg text-gray-300 hover:bg-red-500 hover:text-white transition-all"><X size={14}/></button>
+                          </div>
+                        ) : (
+                          <div 
+                            onClick={() => { 
+                              setEditingId(p.id); 
+                              setEditForm({ name_en: p.name_en || '', price: p.price || '', category: p.category || 'Vegetables', unit: p.unit || '' }); 
+                            }}
+                            className="flex items-baseline gap-1 cursor-pointer group/price"
+                          >
+                            <span className="text-2xl md:text-3xl font-black italic tracking-tighter text-white group-hover/price:text-green-500 transition-colors">
+                              {p.price}
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-black uppercase">TK</span>
+                          </div>
+                        )}
+                      </div>
+                      {!isEditing && (
+                        <button className="w-8 h-8 md:w-10 md:h-10 bg-white/5 rounded-lg md:rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-black transition-all">
+                          <ArrowUpRight size={16} />
+                        </button>
                       )}
                     </div>
-                    <button className="w-8 h-8 md:w-10 md:h-10 bg-white/5 rounded-lg md:rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-black transition-all">
-                      <ArrowUpRight size={16} />
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -200,6 +279,7 @@ export default function ProductsView() {
                 <label className="text-[9px] font-black uppercase text-gray-600 ml-1">Category</label>
                 <select 
                   className="w-full bg-[#111] border border-white/10 rounded-xl py-3 px-5 outline-none focus:border-green-500 text-sm"
+                  value={newProduct.category}
                   onChange={(e) => setNewProduct({...newProduct, category: e.target.value})}
                 >
                   <option value="Vegetables">Vegetables</option>

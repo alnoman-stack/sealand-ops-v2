@@ -36,7 +36,11 @@ export default function CustomersView() {
 
   const startEditing = (customer: any) => {
     setEditingId(customer.id);
-    setEditForm({ name: customer.name, address: customer.address, phone: customer.phone });
+    setEditForm({ 
+      name: customer.name || '', 
+      address: customer.address || '', 
+      phone: customer.phone || '' 
+    });
   };
 
   const handleUpdate = async (id: string) => {
@@ -53,8 +57,8 @@ export default function CustomersView() {
   };
 
   const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.phone.includes(searchTerm)
+    (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (c.phone || '').includes(searchTerm)
   );
 
   return (
@@ -122,8 +126,8 @@ export default function CustomersView() {
                   <td className="px-8 py-5">
                     {editingId === c.id ? (
                       <div className="flex flex-col gap-2">
-                        <input className="bg-black border border-gray-800 p-2 rounded text-xs" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
-                        <input className="bg-black border border-gray-800 p-2 rounded text-[10px] text-gray-400" value={editForm.address} onChange={(e) => setEditForm({...editForm, address: e.target.value})} />
+                        <input className="bg-black border border-gray-800 p-2 rounded text-xs" value={editForm.name || ''} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
+                        <input className="bg-black border border-gray-800 p-2 rounded text-[10px] text-gray-400" value={editForm.address || ''} onChange={(e) => setEditForm({...editForm, address: e.target.value})} />
                       </div>
                     ) : (
                       <>
@@ -134,7 +138,7 @@ export default function CustomersView() {
                   </td>
                   <td className="px-8 py-5">
                     {editingId === c.id ? (
-                      <input className="bg-black border border-gray-800 p-2 rounded text-green-500 font-black italic text-sm" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} />
+                      <input className="bg-black border border-gray-800 p-2 rounded text-green-500 font-black italic text-sm" value={editForm.phone || ''} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} />
                     ) : (
                       <div className="flex items-center gap-2 text-green-500 font-black italic text-lg tracking-tighter"><Phone size={14} className="text-gray-800" /> {c.phone}</div>
                     )}
@@ -169,14 +173,14 @@ export default function CustomersView() {
               <div className="flex justify-between items-start">
                 <div>
                   {editingId === c.id ? (
-                    <input className="bg-black border border-gray-800 p-2 rounded text-xs w-full mb-2" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
+                    <input className="bg-black border border-gray-800 p-2 rounded text-xs w-full mb-2" value={editForm.name || ''} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
                   ) : (
                     <div className="font-black text-gray-200 uppercase italic tracking-tight">{c.name}</div>
                   )}
                   <div className="flex items-center gap-1 text-[10px] text-gray-600 font-black mt-1">
                     <MapPin size={10} /> 
                     {editingId === c.id ? (
-                      <input className="bg-black border border-gray-800 p-1 rounded text-[10px]" value={editForm.address} onChange={(e) => setEditForm({...editForm, address: e.target.value})} />
+                      <input className="bg-black border border-gray-800 p-1 rounded text-[10px]" value={editForm.address || ''} onChange={(e) => setEditForm({...editForm, address: e.target.value})} />
                     ) : c.address}
                   </div>
                 </div>
@@ -195,7 +199,7 @@ export default function CustomersView() {
                 <div className="flex items-center gap-2 text-green-500 font-black italic text-base tracking-tighter">
                   <Phone size={12} className="text-gray-700" /> 
                   {editingId === c.id ? (
-                    <input className="bg-black border border-gray-800 p-1 rounded text-xs w-28" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} />
+                    <input className="bg-black border border-gray-800 p-1 rounded text-xs w-28" value={editForm.phone || ''} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} />
                   ) : c.phone}
                 </div>
                 <a href={`tel:${c.phone}`} className="text-[9px] bg-green-500 text-black px-3 py-1 rounded-full font-black uppercase tracking-widest">Call Now</a>
