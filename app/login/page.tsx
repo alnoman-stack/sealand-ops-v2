@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // ১. Supabase Auth দিয়ে সাইন-ইন
+      // ১. Supabase Auth দিয়ে সাইন-ইন
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -34,13 +34,13 @@ export default function LoginPage() {
         .single();
 
       if (profileError || !profile) {
-        throw new Error("আপনার প্রোফাইল তথ্য পাওয়া যায়নি।");
+        throw new Error("আপনার প্রোফাইল তথ্য পাওয়া যায়নি।");
       }
 
       // ৩. রোল ভেরিফিকেশন (The Guard)
-      // শুধুমাত্র 'admin' এবং 'staff' এই পোর্টালে ঢুকতে পারবে
-      if (profile.role !== 'admin' && profile.role !== 'staff') {
-        // যদি বিটুবি বা সাধারণ ইউজার হয়, তবে সেশন ক্লিয়ার করে দিন
+      // শুধুমাত্র 'admin' এবং 'user' (স্টাফ) এই পোর্টালে ঢুকতে পারবে
+      if (profile.role !== 'admin' && profile.role !== 'user') {
+        // যদি বিটুবি বা সাধারণ ইউজার হয়, তবে সেশন ক্লিয়ার করে দিন
         await supabase.auth.signOut();
         setError("এক্সেস ডিনাইড! এই পোর্টালটি শুধুমাত্র এডমিন ও স্টাফদের জন্য।");
         setLoading(false);
@@ -137,4 +137,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

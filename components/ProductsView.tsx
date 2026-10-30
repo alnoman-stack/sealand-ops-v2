@@ -1,10 +1,16 @@
-'use client'
+'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Package, Search, Loader2, Tag, Plus, Check, X, ArrowUpRight, Edit2 } from 'lucide-react';
 import FileUpload from './FileUpload'; 
+import { useUserRole } from '@/hooks/useUserRole'; // হুকটি ইম্পোর্ট করা হলো
 
 export default function ProductsView() {
+  const { isAdmin, isUser, loading: roleLoading } = useUserRole(); // রোল চেক করার জন্য
+  
+  // এডমিন অথবা স্টাফ উভয়েই এডিট করতে পারবে
+  const canModify = isAdmin || isUser;
+
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -32,6 +38,8 @@ export default function ProductsView() {
 
   // ফুল কার্ড আপডেট হ্যান্ডলার
   const handleUpdateProduct = async (id: number) => {
+    if (!canModify) return alert("Unauthorized action!");
+
     const { error } = await supabase
       .from('products')
       .update({ 
@@ -57,13 +65,16 @@ export default function ProductsView() {
   };
 
   const handleAddProduct = async () => {
+    if (!canModify) return alert("Unauthorized action!");
     if (!newProduct.name_en || !newProduct.price) return alert("সব তথ্য দিন");
+    
     const { error } = await supabase.from('products').insert([{ 
         name_en: newProduct.name_en, 
         price: parseInt(newProduct.price), 
         category: newProduct.category,
         unit: newProduct.unit
     }]);
+    
     if (!error) {
       fetchProducts();
       setIsModalOpen(false);
@@ -74,6 +85,14 @@ export default function ProductsView() {
   const filteredProducts = products.filter((p: any) => 
     (p.name_en || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (roleLoading) {
+    return (
+      <div className="h-screen w-full bg-[#020202] text-white flex items-center justify-center">
+        <Loader2 className="animate-spin text-green-500" size={30} />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-full bg-[#020202] text-white flex flex-col overflow-hidden font-sans">
@@ -98,14 +117,20 @@ export default function ProductsView() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            
             <div className="flex gap-2 w-full sm:w-auto">
-              <button 
-                onClick={() => setIsModalOpen(true)}
-                className="flex-1 sm:flex-none bg-green-500 hover:bg-white text-black px-4 md:px-6 py-3 rounded-full flex items-center justify-center gap-2 transition-all font-black uppercase text-[10px]"
-              >
-                <Plus size={16} /> Add
-              </button>
-              <FileUpload onUploadSuccess={fetchProducts} />
+              {/* Admin অথবা Staff উভয়েই Add এবং FileUpload অপশনগুলো দেখতে পাবে */}
+              {canModify && (
+                <>
+                  <button 
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex-1 sm:flex-none bg-green-500 hover:bg-white text-black px-4 md:px-6 py-3 rounded-full flex items-center justify-center gap-2 transition-all font-black uppercase text-[10px]"
+                  >
+                    <Plus size={16} /> Add
+                  </button>
+                  <FileUpload onUploadSuccess={fetchProducts} />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -133,7 +158,9 @@ export default function ProductsView() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-[9px] font-mono text-gray-800">ID: {p.id}</span>
-                          {!isEditing && (
+                          
+                          {/* Admin অথবা Staff হলে কার্ড এডিট বাটন দেখতে পাবে */}
+                          {canModify && !isEditing && (
                             <button 
                               onClick={() => { 
                                 setEditingId(p.id); 
@@ -148,9 +175,9 @@ export default function ProductsView() {
                         </div>
                       </div>
 
-                      {/* প্রোডাক্ট নাম, ক্যাটাগরি (ড্রপডাউন) ও ইউনিট এডিট সেকশন */}
+                      {/* প্রোডাক্ট নাম, ক্যাটাগরি ও ইউনিট এডিট সেকশন */}
                       <div className="mb-6 space-y-3">
-                        {isEditing ? (
+                        {isEditing && canModify ? (
                           <div className="space-y-2">
                             <input 
                               type="text"
@@ -160,7 +187,6 @@ export default function ProductsView() {
                               placeholder="Product Name"
                             />
                             <div className="grid grid-cols-2 gap-2">
-                              {/* ক্যাটাগরি ড্রপডাউন */}
                               <select 
                                 className="w-full bg-black border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none uppercase"
                                 value={editForm.category}
@@ -202,7 +228,7 @@ export default function ProductsView() {
                     <div className="pt-4 border-t border-white/5 flex items-end justify-between">
                       <div className="flex-1">
                         <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-1">Rate / {isEditing ? editForm.unit : p.unit}</p>
-                        {isEditing ? (
+                        {isEditing && canModify ? (
                           <div className="flex items-center gap-2">
                             <input 
                               type="number"
@@ -216,10 +242,12 @@ export default function ProductsView() {
                         ) : (
                           <div 
                             onClick={() => { 
-                              setEditingId(p.id); 
-                              setEditForm({ name_en: p.name_en || '', price: p.price || '', category: p.category || 'Vegetables', unit: p.unit || '' }); 
+                              if (canModify) {
+                                setEditingId(p.id); 
+                                setEditForm({ name_en: p.name_en || '', price: p.price || '', category: p.category || 'Vegetables', unit: p.unit || '' }); 
+                              }
                             }}
-                            className="flex items-baseline gap-1 cursor-pointer group/price"
+                            className={`flex items-baseline gap-1 ${canModify ? 'cursor-pointer group/price' : ''}`}
                           >
                             <span className="text-2xl md:text-3xl font-black italic tracking-tighter text-white group-hover/price:text-green-500 transition-colors">
                               {p.price}
@@ -228,6 +256,7 @@ export default function ProductsView() {
                           </div>
                         )}
                       </div>
+                      
                       {!isEditing && (
                         <button className="w-8 h-8 md:w-10 md:h-10 bg-white/5 rounded-lg md:rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-black transition-all">
                           <ArrowUpRight size={16} />
@@ -242,8 +271,8 @@ export default function ProductsView() {
         </div>
       </main>
 
-      {/* --- ADD PRODUCT MODAL --- */}
-      {isModalOpen && (
+      {/* --- ADD PRODUCT MODAL (For Admin & Staff) --- */}
+      {isModalOpen && canModify && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
           <div className="bg-[#0a0a0a] border border-white/10 w-full max-w-md rounded-[2rem] p-6 md:p-10 relative">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white"><X /></button>

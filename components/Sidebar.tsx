@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'; 
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
+import { useUserRole } from '@/hooks/useUserRole'; // হুকটি ইম্পোর্ট করা হলো
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -37,6 +38,7 @@ const menuItems = [
 
 export default function Sidebar({ activeView, setView }: any) {
   const router = useRouter();
+  const { isAdmin, isUser, loading: roleLoading } = useUserRole(); // রোল ডেটা ফেচ করা হচ্ছে
   const [userName, setUserName] = useState('Loading...'); 
   const [isOpen, setIsOpen] = useState(false); 
 
@@ -64,6 +66,18 @@ export default function Sidebar({ activeView, setView }: any) {
     setView(id);
     setIsOpen(false); 
   };
+
+  // স্টাফ বা ইউজার রোল হলে শুধু এই আইডিগুলোর পেজ দেখতে পাবে (এখানে 'visit-log' যুক্ত করা হয়েছে)
+  const staffAllowedPages = [
+    'create-invoice',
+    'orders',
+    'sourcing',
+    'purchase',
+    'vendors',
+    'expenses',
+    'products',
+    'visit-log'
+  ];
 
   return (
     <>
@@ -102,22 +116,29 @@ export default function Sidebar({ activeView, setView }: any) {
         
         {/* Navigation Menu */}
         <nav className="flex-1 px-4 space-y-1.5 mb-6">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleMenuClick(item.id)}
-              className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 ${
-                activeView === item.id 
-                ? (['vendors', 'purchase', 'sourcing', 'inventory-report', 'visit-log'].includes(item.id)
-                    ? 'bg-orange-600 text-black shadow-lg shadow-orange-600/20' 
-                    : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20')
-                : 'text-gray-500 hover:bg-white/5 hover:text-gray-200'
-              }`}
-            >
-              <item.icon size={16} className={`${activeView === item.id ? 'scale-110' : ''} transition-transform`} />
-              <span className="truncate">{item.label}</span>
-            </button>
-          ))}
+          {!roleLoading && menuItems.map((item) => {
+            // এডমিন হলে সব দেখতে পাবে, স্টাফ হলে শুধু 'staffAllowedPages'-এ থাকা আইডিগুলো দেখতে পাবে
+            const hasAccess = isAdmin || (isUser && staffAllowedPages.includes(item.id));
+
+            if (!hasAccess) return null; // এক্সেস না থাকলে মেনু রেন্ডার হবে না
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleMenuClick(item.id)}
+                className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 ${
+                  activeView === item.id 
+                  ? (['vendors', 'purchase', 'sourcing', 'inventory-report', 'visit-log'].includes(item.id)
+                      ? 'bg-orange-600 text-black shadow-lg shadow-orange-600/20' 
+                      : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20')
+                  : 'text-gray-500 hover:bg-white/5 hover:text-gray-200'
+                }`}
+              >
+                <item.icon size={16} className={`${activeView === item.id ? 'scale-110' : ''} transition-transform`} />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* Footer & Logout Section */}

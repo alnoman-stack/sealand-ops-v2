@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic'; 
 import { supabase } from '../lib/supabase';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useUserRole } from '@/hooks/useUserRole'; // ১. রোল চেক করার হুক ইম্পোর্ট করা হলো
 
 import { 
   Clock, ArrowRight, Users, CreditCard, Search, Tag, RefreshCcw, 
@@ -52,6 +53,7 @@ const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.Cartesian
 
 export default function DashboardHome() {
   const router = useRouter();
+  const { isAdmin, loading: roleLoading } = useUserRole(); // ২. এডমিন কিনা তা চেক করার জন্য হুক কল করা হলো
   
   const getToday = useCallback(() => new Date().toLocaleDateString('en-CA'), []); 
   const [startDate, setStartDate] = useState(getToday());
@@ -142,7 +144,7 @@ export default function DashboardHome() {
       {/* Main Grid Layout */}
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-visible lg:overflow-hidden pb-4">
         
-        <section className="col-span-1 lg:col-span-8 flex flex-col gap-6 h-full min-h-0 overflow-y-visible lg:overflow-y-auto no-scrollbar">
+        <section className={`col-span-1 ${isAdmin ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col gap-6 h-full min-h-0 overflow-y-visible lg:overflow-y-auto no-scrollbar`}>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 shrink-0">
               {/* Stats Table */}
@@ -226,10 +228,10 @@ export default function DashboardHome() {
                         style={{ 
                           width: `${(item.actualValue / maxVal) * 100}%`, 
                           backgroundColor: COLORS[index % COLORS.length] 
-                        }}
-                      />
-                    </div>
+                      }}
+                    />
                   </div>
+                </div>
                 )) : (
                   <div className="h-full flex items-center justify-center text-[10px] text-gray-600 italic uppercase">No Data Found</div>
                 )}
@@ -237,8 +239,9 @@ export default function DashboardHome() {
             </div>
           </div>
 
-          {/* Overdue Invoices */}
-          <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] p-5 md:p-6 flex flex-col shadow-2xl shrink-0 min-h-[300px]"> 
+          {/* Overdue Invoices - ৩. শুধুমাত্র Admin হলে এই সেকশন দেখাবে */}
+          {isAdmin && (
+            <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] p-5 md:p-6 flex flex-col shadow-2xl shrink-0 min-h-[300px]"> 
             <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2">
               <Clock size={14} className="text-red-500" /> 
               Overdue Invoices <span className="text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full ml-1">[{filteredDueInvoices.length}]</span>
@@ -260,11 +263,13 @@ export default function DashboardHome() {
               ))}
             </div>
           </div>
+          )}
         </section>
 
-        {/* Right Sidebar: Customer Ledger */}
-        <aside className="col-span-1 lg:col-span-4 h-full min-h-[500px] lg:min-h-0">
-          <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden h-full">
+        {/* Right Sidebar: Customer Ledger - ৪. শুধুমাত্র Admin হলে এই সাইডবার দেখাবে */}
+        {isAdmin && (
+          <aside className="col-span-1 lg:col-span-4 h-full min-h-[500px] lg:min-h-0">
+            <div className="bg-[#0a0a0a] border border-gray-900 rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden h-full">
               <div className="p-5 md:p-7 border-b border-gray-900/50 bg-[#0d0d0d]/50 shrink-0">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <h3 className="text-[11px] font-black text-white/80 uppercase tracking-widest flex items-center gap-3 w-full sm:w-auto">
@@ -313,6 +318,7 @@ export default function DashboardHome() {
               </div>
           </div>
         </aside>
+        )}
       </main>
       
       {/* Modal Components */}
